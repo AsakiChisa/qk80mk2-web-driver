@@ -68,7 +68,7 @@
     'keySearchInput','keyPickerHint','keyPickerContent','cancelRemapBtn','useHexBtn','selectedMatrixMeta','keyLayer','matrixRows','matrixCols',
     'scanMatrixBtn','keyMatrix','keycodeInput','writeKeyBtn','undoKeyBtn','redoKeyBtn','resetKeymapBtn','debugLog','clearLogBtn','toast',
     'readMacrosBtn','importMacrosBtn','exportMacrosBtn','macroFileInput','saveMacrosBtn','macroCountLabel','macroBufferLabel','macroList','macroTitle','macroRecordDelay','macroAddDelayBtn','macroAddActionBtn','macroRecordBtn','macroClearBtn','macroTimeline','macroExpression','macroStatus','macroRecorderOverlay','macroRecorderIndex','macroRecorderCount','macroRecorderLast','macroRecorderPreview','macroStopOverlayBtn','macroActionOverlay','macroActionTitle','macroActionTabs','macroActionKeyAction','macroActionKeyName','macroKeyDatalist','macroActionDelay','macroActionText','macroActionPosition','macroActionCloseBtn','macroActionCancelBtn','macroActionSaveBtn',
-    'rgbReadBtn','rgbSaveStaticBtn','rgbPaintColor','rgbPalette','rgbFillBtn','rgbNeutralBtn','rgbPreviewFps','rgbPreviewBtn','rgbLiveFps','rgbLiveBtn','rgbFrameTitle','rgbPainterStatus','rgbWriteProgress','rgbKeyboard','rgbFrameCounter','rgbAddFrameBtn','rgbDuplicateFrameBtn','rgbDeleteFrameBtn','rgbFrameList','rgbSelectedKeyLabel','rgbLedIndexInput','rgbSetLedIndexBtn','rgbTestLedIndexBtn','rgbResetLedMapBtn','rgbMapMeta',
+    'rgbReadBtn','rgbSaveStaticBtn','rgbClearFrameBtn','rgbPaintColor','rgbPalette','rgbFillBtn','rgbNeutralBtn','rgbPreviewFps','rgbPreviewBtn','rgbLiveFps','rgbLiveBtn','rgbFrameTitle','rgbPainterStatus','rgbWriteProgress','rgbKeyboard','rgbFrameCounter','rgbAddFrameBtn','rgbDuplicateFrameBtn','rgbDeleteFrameBtn','rgbFrameList','rgbSelectedKeyLabel','rgbLedIndexInput','rgbSetLedIndexBtn','rgbTestLedIndexBtn','rgbResetLedMapBtn','rgbMapMeta',
     'profileName','exportProfileBtn','profileExportStatus','profileFileInput','profileSummary','profileApplyConnection','profileApplyMatrix','applyProfileBtn',
     'readDeviceSettingsBtn','magicNkro','magicGui','magicAltGui','magicCapsCtrl','saveMagicBtn','featureLedPower','featureSleep','featureDebounceMode','featureDebounceDelay','saveFeaturesBtn','browserClock','syncTimeBtn','connectMode','saveConnectModeBtn','clearCurrentBindBtn','clearAllBindsBtn','receiverDfuBtn','resetConfirm','eepromResetBtn'
   ].map(id => [id, document.getElementById(id)]));
@@ -502,6 +502,11 @@
   // --- v0.5 Per-Key RGB ----------------------------------------------------
   const PER_KEY_RGB_PREFIX = [0x00, 0x01];
   const RGB_MAP_STORAGE_KEY = 'chisa-qk80mk2-perkey-led-map-v1';
+  const RGB_OFF = '__off__';
+  const RGB_OFF_COLOR = '#000000';
+  const blankRgbFrame = () => Array(qkLayout.length).fill(RGB_OFF);
+  const normalizeRgbFrameColor = color => color === RGB_OFF || String(color).toLowerCase() === RGB_OFF_COLOR ? RGB_OFF : (/^#[0-9a-f]{6}$/i.test(String(color)) ? String(color) : RGB_OFF);
+  const rgbDisplayColor = color => color === RGB_OFF ? RGB_OFF_COLOR : color;
 
   function ensureRgbState() {
     if (!rgbLedMap.length) {
@@ -511,10 +516,10 @@
       } catch {}
       if (!rgbLedMap.length) rgbLedMap = qkLayout.map((_, i) => i);
     }
-    if (!rgbFrames.length || !Array.isArray(rgbFrames[0])) rgbFrames = [Array(qkLayout.length).fill('#ffffff')];
+    if (!rgbFrames.length || !Array.isArray(rgbFrames[0])) rgbFrames = [blankRgbFrame()];
     rgbFrames = rgbFrames.map(frame => {
-      const out = Array(qkLayout.length).fill('#ffffff');
-      if (Array.isArray(frame)) frame.slice(0, qkLayout.length).forEach((c,i)=>out[i]=/^#[0-9a-f]{6}$/i.test(String(c))?String(c):'#ffffff');
+      const out = blankRgbFrame();
+      if (Array.isArray(frame)) frame.slice(0, qkLayout.length).forEach((c,i)=>out[i]=normalizeRgbFrameColor(c));
       return out;
     });
     rgbCurrentFrame = Math.max(0, Math.min(rgbCurrentFrame, rgbFrames.length - 1));
@@ -537,11 +542,11 @@
   }
 
   function buildRgbPalette() {
-    const palette = ['#ff4fa3','#ff3b30','#ff9500','#ffd60a','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ffffff'];
+    const palette = [RGB_OFF_COLOR,'#ff4fa3','#ff3b30','#ff9500','#ffd60a','#34c759','#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ffffff'];
     els.rgbPalette.innerHTML = '';
     palette.forEach(color => {
       const b = document.createElement('button');
-      b.className = 'rgb-palette-chip'; b.type = 'button'; b.title = color; b.style.background = color;
+      b.className = 'rgb-palette-chip'; b.type = 'button'; b.title = color === RGB_OFF_COLOR ? '黑色 · 熄灭预览' : color; b.style.background = color;
       b.addEventListener('click', () => { els.rgbPaintColor.value = color; });
       els.rgbPalette.appendChild(b);
     });
@@ -558,11 +563,14 @@
 
   function paintRgbKey(i, color) {
     ensureRgbState();
-    rgbFrames[rgbCurrentFrame][i] = color;
+    const storedColor = normalizeRgbFrameColor(color);
+    const displayColor = rgbDisplayColor(storedColor);
+    rgbFrames[rgbCurrentFrame][i] = storedColor;
     const key = els.rgbKeyboard.querySelector(`[data-rgb-index="${i}"]`);
     if (key) {
-      key.style.setProperty('--rgb-key-color', color);
-      key.dataset.color = color;
+      key.style.setProperty('--rgb-key-color', displayColor);
+      key.dataset.color = storedColor;
+      key.classList.toggle('rgb-off', storedColor === RGB_OFF);
     }
     updateRgbFrameThumb(rgbCurrentFrame);
     selectRgbKey(i);
@@ -580,13 +588,13 @@
       const paint = (e, color) => { e.preventDefault(); paintRgbKey(i,color); };
       b.addEventListener('pointerdown', e => {
         if(e.button===0) paint(e, els.rgbPaintColor.value);
-        else if(e.button===2) paint(e, '#ffffff');
+        else if(e.button===2) paint(e, RGB_OFF);
       });
       b.addEventListener('pointerover', e => {
         if(e.buttons&1) paint(e, els.rgbPaintColor.value);
-        else if(e.buttons&2) paint(e, '#ffffff');
+        else if(e.buttons&2) paint(e, RGB_OFF);
       });
-      b.addEventListener('contextmenu', e => { e.preventDefault(); paintRgbKey(i,'#ffffff'); });
+      b.addEventListener('contextmenu', e => { e.preventDefault(); paintRgbKey(i,RGB_OFF); });
       els.rgbKeyboard.appendChild(b);
     });
     renderRgbFrame();
@@ -596,7 +604,7 @@
     ensureRgbState();
     const frame = rgbFrames[rgbCurrentFrame];
     els.rgbKeyboard.querySelectorAll('.rgb-keycap').forEach((b,i)=>{
-      const color=frame[i]||'#ffffff'; b.style.setProperty('--rgb-key-color',color); b.dataset.color=color;
+      const color=frame[i]??RGB_OFF, displayColor=rgbDisplayColor(color); b.style.setProperty('--rgb-key-color',displayColor); b.dataset.color=color;b.classList.toggle('rgb-off',color===RGB_OFF);
       b.querySelector('small').textContent=`LED ${rgbLedMap[i]}`;
       b.classList.toggle('selected',i===rgbSelectedVisualIndex);
     });
@@ -606,7 +614,7 @@
 
   function makeRgbThumb(frame) {
     const d=document.createElement('div'); d.className='rgb-mini-grid';
-    frame.forEach((color,i)=>{const p=document.createElement('i');p.style.background=color;p.style.setProperty('--mx',qkLayout[i].x);p.style.setProperty('--my',qkLayout[i].y);p.style.setProperty('--mw',Math.max(.55,qkLayout[i].w||1));d.appendChild(p);});
+    frame.forEach((color,i)=>{const p=document.createElement('i');p.style.background=rgbDisplayColor(color);p.style.setProperty('--mx',qkLayout[i].x);p.style.setProperty('--my',qkLayout[i].y);p.style.setProperty('--mw',Math.max(.55,qkLayout[i].w||1));d.appendChild(p);});
     return d;
   }
 
@@ -625,13 +633,14 @@
   }
 
   function addRgbFrame(copy=true) {
-    ensureRgbState(); const frame=copy?[...rgbFrames[rgbCurrentFrame]]:Array(qkLayout.length).fill('#ffffff');
+    ensureRgbState(); const frame=copy?[...rgbFrames[rgbCurrentFrame]]:blankRgbFrame();
     rgbFrames.splice(rgbCurrentFrame+1,0,frame);rgbCurrentFrame++;renderRgbFrame();renderRgbFrameList();
   }
   function deleteRgbFrame() {
-    ensureRgbState(); if(rgbFrames.length===1){rgbFrames[0]=Array(qkLayout.length).fill('#ffffff');rgbCurrentFrame=0;}else{rgbFrames.splice(rgbCurrentFrame,1);rgbCurrentFrame=Math.min(rgbCurrentFrame,rgbFrames.length-1);}renderRgbFrame();renderRgbFrameList();
+    ensureRgbState(); if(rgbFrames.length===1){rgbFrames[0]=blankRgbFrame();rgbCurrentFrame=0;}else{rgbFrames.splice(rgbCurrentFrame,1);rgbCurrentFrame=Math.min(rgbCurrentFrame,rgbFrames.length-1);}renderRgbFrame();renderRgbFrameList();
   }
-  function fillRgbFrame(color){ensureRgbState();rgbFrames[rgbCurrentFrame]=Array(qkLayout.length).fill(color);renderRgbFrame();renderRgbFrameList();}
+  function fillRgbFrame(color){ensureRgbState();rgbFrames[rgbCurrentFrame]=Array(qkLayout.length).fill(normalizeRgbFrameColor(color));renderRgbFrame();renderRgbFrameList();}
+  function clearRgbFrame(){fillRgbFrame(RGB_OFF);els.rgbPainterStatus.textContent='当前帧已清空为熄灭预览；固件不支持把该状态写成单键熄灭。';toast('当前 RGB 帧已清空');}
 
   function setRgbBusy(label = '') {
     rgbBusy = label;
@@ -662,6 +671,8 @@
 
   async function writeRgbFrameToKeyboard(frame, {commit=true, diffFrom=null, progress=true}={}) {
     if(!hidDevice?.opened)throw new Error('请先连接 HID。'); ensureRgbState(); let sent=0;
+    const offCount=frame.filter(color=>color===RGB_OFF).length;
+    if(offCount)throw new Error(`当前帧含 ${offCount} 个熄灭预览键；QK/VIA 固件没有逐键亮度，无法将黑色写成单键熄灭。请先为这些键选择可写入颜色。`);
     for(let i=0;i<qkLayout.length;i++){
       if(diffFrom && diffFrom[i]===frame[i]) continue;
       await setPerKeyRgb(rgbLedMap[i],frame[i],false); sent++;
@@ -678,7 +689,7 @@
   }
 
   function applyRgbWebPreviewFrame(frame) {
-    els.rgbKeyboard.querySelectorAll('.rgb-keycap').forEach((b,i)=>b.style.setProperty('--rgb-key-color',frame[i]||'#ffffff'));
+    els.rgbKeyboard.querySelectorAll('.rgb-keycap').forEach((b,i)=>{const color=frame[i]??RGB_OFF;b.style.setProperty('--rgb-key-color',rgbDisplayColor(color));b.classList.toggle('rgb-off',color===RGB_OFF);});
   }
   function stopRgbPreview() {
     if(rgbPreviewTimer)clearInterval(rgbPreviewTimer);rgbPreviewTimer=null;els.rgbPreviewBtn.textContent='▶ 网页预览';renderRgbFrame();
@@ -1757,7 +1768,7 @@
     const boardB=darkUi?mixHex(boardA,'#000000',.22):mixHex(boardA,'#000000',.12);
     [
       ['--bg',appearanceState.bg],['--panel',appearanceState.panel],['--panel-2',surface2],['--surface',surface],['--surface-2',surface2],['--surface-3',surface3],
-      ['--input-bg',inputBg],['--sidebar-bg',sidebar],['--topbar-bg',topbar],['--line',line],['--line-strong',lineStrong],['--text',text],['--muted',muted],
+      ['--input-bg',inputBg],['--rgb-palette-bg',darkUi?'#090a0d':'#ffffff'],['--sidebar-bg',sidebar],['--topbar-bg',topbar],['--line',line],['--line-strong',lineStrong],['--text',text],['--muted',muted],
       ['--accent',appearanceState.accent],['--accent-strong',accentStrong],['--accent-soft',accentSoft],['--accent-ink',contrastInk(appearanceState.accent)],
       ['--key-select',appearanceState.keySelect],['--key-select-ink',contrastInk(appearanceState.keySelect)],['--board-a',boardA],['--board-b',boardB],
       ['--driver-bg-opacity',String(appearanceState.bgOpacity/100)],['--driver-bg-blur',`${appearanceState.bgBlur}px`],['--driver-bg-fit',appearanceState.bgFit||'cover'],['--driver-bg-position',appearanceState.bgPosition||'center center']
@@ -1834,6 +1845,7 @@
     window.addEventListener('pointerup',finishMatrixStroke);window.addEventListener('pointercancel',finishMatrixStroke);
     els.rgbReadBtn.addEventListener('click',()=>safe(()=>runRgbExclusive('读取逐键 RGB', readPerKeyRgbFromKeyboard)));
     els.rgbSaveStaticBtn.addEventListener('click',()=>safe(()=>runRgbExclusive('写入静态 RGB', saveRgbStaticFrame)));
+    els.rgbClearFrameBtn.addEventListener('click',clearRgbFrame);
     els.rgbFillBtn.addEventListener('click',()=>fillRgbFrame(els.rgbPaintColor.value));
     els.rgbNeutralBtn.addEventListener('click',()=>fillRgbFrame('#ffffff'));
     els.rgbPreviewBtn.addEventListener('click',toggleRgbPreview);

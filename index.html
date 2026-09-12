@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#e9eef0" />
-  <title>QK80 MK2 Web Driver v1.0.1</title>
+  <title>QK80 MK2 Web Driver v1.0.2</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -76,7 +76,7 @@
 
         <div class="sidebar-foot">
           <div><span class="sidebar-foot-dot"></span> WebHID / CDC</div>
-          <small>v1.0.1 · FRAME ACTIONS REFINED</small>
+          <small>v1.0.2 · RGB OFF PREVIEW</small>
         </div>
       </aside>
 
@@ -174,7 +174,6 @@
           </div>
           <div class="inline-actions">
             <button class="ghost" id="rgbReadBtn">读取键盘静态色</button>
-            <button class="primary" id="rgbSaveStaticBtn">写入并保存当前帧</button>
           </div>
         </div>
 
@@ -188,10 +187,10 @@
 
         <div class="rgb-toolbar card">
           <div class="rgb-tool-main">
-            <label class="rgb-color-field">画笔颜色 <input type="color" id="rgbPaintColor" value="#ff4fa3"></label>
+            <label class="rgb-color-field">画笔颜色 <input type="color" id="rgbPaintColor" value="#000000"></label>
             <div class="rgb-palette" id="rgbPalette" aria-label="快捷颜色"></div>
             <button class="ghost compact" id="rgbFillBtn">整帧填充</button>
-            <button class="ghost compact" id="rgbNeutralBtn" title="Per-Key 协议只有色相/饱和度，不能逐键独立亮度">整帧去饱和</button>
+            <button class="ghost compact" id="rgbNeutralBtn" title="白色为无饱和亮色，实际亮度由轴灯全局控制">整帧白色</button>
           </div>
           <div class="rgb-tool-play">
             <label>网页预览 FPS
@@ -210,7 +209,7 @@
             <div class="rgb-painter-head">
               <div>
                 <strong id="rgbFrameTitle">Frame 1</strong>
-                <span id="rgbPainterStatus">左键绘制 · 拖动连续上色 · 右键设为无饱和色</span>
+                <span id="rgbPainterStatus">黑色＝熄灭预览 · 白色＝无饱和亮色 · 右键恢复熄灭预览</span>
               </div>
               <div class="rgb-progress-inline"><span id="rgbWriteProgress">就绪</span></div>
             </div>
@@ -220,7 +219,7 @@
               </div>
             </div>
             <div class="rgb-note">
-              <strong>注意：</strong>官方 Per-Key RGB 接口每颗键只保存 <code>Hue + Saturation</code>，亮度由“轴灯 → 亮度”全局控制，所以右键并不是单键熄灭，而是把该键设为无饱和色。实时多帧播放不会执行 SAVE，避免持续写 EEPROM；网页关闭后会停止。
+              <strong>注意：</strong>黑色现在作为网页里的“熄灭预览”状态，与白色明确区分。官方 Per-Key RGB 接口每颗键仍只保存 <code>Hue + Saturation</code>，不能把该状态写成单键熄灭；含熄灭格的帧会在写入前提示。亮度仍由“轴灯 → 亮度”全局控制。
             </div>
           </article>
 
@@ -228,10 +227,14 @@
             <div class="frames-head">
               <div><h3>动画帧</h3><p id="rgbFrameCounter">1 / 1</p></div>
               <div class="mini-actions">
-                <button class="icon-btn" id="rgbAddFrameBtn" title="新增空白帧">＋</button>
+                <button class="icon-btn" id="rgbAddFrameBtn" title="新增熄灭预览帧">＋</button>
                 <button class="icon-btn" id="rgbDuplicateFrameBtn" title="复制当前帧">⧉</button>
                 <button class="icon-btn danger" id="rgbDeleteFrameBtn" title="删除当前帧">−</button>
               </div>
+            </div>
+            <div class="frame-primary-actions rgb-frame-primary-actions">
+              <button class="ghost" id="rgbClearFrameBtn">清空当前帧</button>
+              <button class="primary" id="rgbSaveStaticBtn">写入并保存当前帧</button>
             </div>
             <div class="rgb-frame-list" id="rgbFrameList"></div>
             <details class="rgb-calibration">
@@ -554,7 +557,7 @@
     </main>
 
     <footer>
-      <span>QK80 MK2 Web Driver v1.0.1</span>
+      <span>QK80 MK2 Web Driver v1.0.2</span>
       <span>使用前请关闭 QK 官方网页；COM 串口同一时间只能由一个页面占用。</span>
     </footer>
       </div>
