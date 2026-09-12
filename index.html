@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#e9eef0" />
-  <title>QK80 MK2 Web Driver v1.0.0</title>
+  <title>QK80 MK2 Web Driver v1.0.1</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -76,7 +76,7 @@
 
         <div class="sidebar-foot">
           <div><span class="sidebar-foot-dot"></span> WebHID / CDC</div>
-          <small>v1.0.0 · STABLE RELEASE</small>
+          <small>v1.0.1 · FRAME ACTIONS REFINED</small>
         </div>
       </aside>
 
@@ -253,10 +253,6 @@
       <section class="tab-panel" id="tab-matrix">
         <div class="section-title">
           <div><h2>7×7 自定义点阵动画</h2><p>CDC：115200 baud · 64-byte packet · C0/C1 · HSV888 row-major。</p></div>
-          <div class="inline-actions">
-            <button class="ghost" id="clearFrameBtn">清空当前帧</button>
-            <button class="primary" id="uploadMatrixBtn">保存到键盘</button>
-          </div>
         </div>
 
         <section class="matrix-device-strip card">
@@ -295,6 +291,10 @@
                 <button class="icon-btn" id="duplicateFrameBtn" title="复制当前帧">⧉</button>
                 <button class="icon-btn danger" id="deleteFrameBtn" title="删除当前帧">−</button>
               </div>
+            </div>
+            <div class="frame-primary-actions">
+              <button class="ghost" id="clearFrameBtn">清空当前帧</button>
+              <button class="primary" id="uploadMatrixBtn">保存到键盘</button>
             </div>
             <div class="preview-box">
               <canvas id="matrixPreview" width="7" height="7"></canvas>
@@ -554,7 +554,7 @@
     </main>
 
     <footer>
-      <span>QK80 MK2 Web Driver v1.0.0</span>
+      <span>QK80 MK2 Web Driver v1.0.1</span>
       <span>使用前请关闭 QK 官方网页；COM 串口同一时间只能由一个页面占用。</span>
     </footer>
       </div>
