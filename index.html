@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#e9eef0" />
+  <title>QK80 MK2 Web Driver v1.0.0</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-lockup">
+        <div class="brand-mark" aria-hidden="true">QK</div>
+        <div class="brand-copy">
+          <strong>CHISA LAB</strong>
+          <span>QK80 MK2 WEB DRIVER</span>
+        </div>
+      </div>
+      <div class="topbar-device topbar-device-status">
+        <div class="topbar-device-name">
+          <span class="topbar-online-dot"></span>
+          <div><strong>QK80 MK2</strong><small>VID 514B · PID 4D02</small></div>
+        </div>
+        <div class="topbar-stat"><span>Protocol</span><strong id="protocolValue">—</strong></div>
+        <div class="topbar-stat"><span>Layers</span><strong id="layersValue">—</strong></div>
+        <div class="topbar-stat"><span>CDC</span><strong id="cdcValue">—</strong></div>
+        <div class="topbar-device-actions">
+          <button class="ghost compact" id="probeBtn">读取状态</button>
+          <button class="ghost compact danger-text" id="disconnectBtn">断开</button>
+        </div>
+      </div>
+      <div class="badges">
+        <span class="badge" id="httpsBadge">安全上下文：检测中</span>
+        <span class="badge" id="browserBadge">浏览器 API：检测中</span>
+      </div>
+    </header>
+
+    <div class="driver-layout">
+      <aside class="driver-sidebar">
+        <div class="sidebar-device-card sidebar-hid-card">
+          <div class="sidebar-device-main">
+            <div class="sidebar-device-art" aria-hidden="true">
+              <svg viewBox="0 0 96 62" role="img" aria-label="QK80 keyboard">
+                <rect class="kbd-shell" x="3" y="5" width="90" height="52" rx="6"></rect>
+                <g class="kbd-keys">
+                  <rect class="kbd-key kbd-accent" x="9" y="11" width="8" height="7" rx="1.4"></rect>
+                  <rect class="kbd-key" x="20" y="11" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="31" y="11" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="42" y="11" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="56" y="11" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="67" y="11" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="78" y="11" width="8" height="7" rx="1.4"></rect>
+                  <rect class="kbd-key" x="9" y="22" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="20" y="22" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="31" y="22" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="42" y="22" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="53" y="22" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="64" y="22" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="75" y="22" width="11" height="7" rx="1.4"></rect>
+                  <rect class="kbd-key" x="9" y="33" width="11" height="7" rx="1.4"></rect><rect class="kbd-key" x="23" y="33" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="34" y="33" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="45" y="33" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="56" y="33" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="67" y="33" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="78" y="33" width="8" height="7" rx="1.4"></rect>
+                  <rect class="kbd-key" x="9" y="44" width="10" height="7" rx="1.4"></rect><rect class="kbd-key" x="22" y="44" width="10" height="7" rx="1.4"></rect><rect class="kbd-key" x="35" y="44" width="31" height="7" rx="1.4"></rect><rect class="kbd-key" x="69" y="44" width="8" height="7" rx="1.4"></rect><rect class="kbd-key" x="80" y="44" width="8" height="7" rx="1.4"></rect>
+                </g>
+              </svg>
+            </div>
+            <div class="sidebar-device-copy"><strong>QK80 MK2</strong><small>Custom Web Driver</small></div>
+            <span class="status-dot" id="hidDot" title="WebHID 状态"></span>
+          </div>
+          <button class="primary sidebar-connect-btn" id="connectHidBtn">连接 HID</button>
+          <div class="kv sidebar-connection-info" id="hidInfo">未连接</div>
+        </div>
+
+
+        <nav class="tabs" aria-label="功能导航">
+          <div class="nav-section-label">KEYBOARD</div>
+          <button class="tab active" data-tab="keymap"><span class="nav-icon">⌨</span><span>可视化改键</span></button>
+          <button class="tab" data-tab="macro"><span class="nav-icon">⌁</span><span>宏</span></button>
+          <button class="tab" data-tab="profile"><span class="nav-icon">▣</span><span>Profile</span></button>
+          <div class="nav-section-label">LIGHTING</div>
+          <button class="tab" data-tab="perkeyrgb"><span class="nav-icon">◫</span><span>主键盘 RGB</span><em>LAB</em></button>
+          <button class="tab" data-tab="matrix"><span class="nav-icon">⠿</span><span>7×7 点阵</span></button>
+          <div class="nav-section-label">SYSTEM</div>
+          <button class="tab" data-tab="device"><span class="nav-icon">⚙</span><span>设备设置</span></button>
+          <button class="tab" data-tab="appearance"><span class="nav-icon">◐</span><span>界面样式</span></button>
+          <button class="tab" data-tab="debug"><span class="nav-icon">›_</span><span>调试日志</span></button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div><span class="sidebar-foot-dot"></span> WebHID / CDC</div>
+          <small>v1.0.0 · STABLE RELEASE</small>
+        </div>
+      </aside>
+
+      <div class="driver-workspace">
+        <div class="workspace-intro">
+          <div><span class="workspace-kicker">DEVICE CONTROL</span><h1>QK80 MK2</h1></div>
+          <p>改键、宏、灯光、点阵与设备参数集中管理。</p>
+        </div>
+
+
+
+    <main>
+      <section class="tab-panel active" id="tab-keymap">
+        <div class="section-title">
+          <div>
+            <h2>QK80 MK2 可视化改键</h2>
+            <p>紧凑同屏改键：上方选实体键，下方立即选择功能并应用。支持 Layer 0–3、搜索与分区键池。</p>
+          </div>
+          <button class="primary" id="readPhysicalBtn">读取当前 Layer</button>
+        </div>
+
+        <div class="card keymap-topbar">
+          <div class="layer-switcher" id="layerTabs"></div>
+          <div class="keymap-status" id="physicalStatus">连接 HID 后读取键位。</div>
+          <div class="keymap-history-actions" aria-label="改键历史操作">
+            <button class="ghost compact history-btn" id="undoKeyBtn" disabled title="撤销上一次改键">↶ <span>撤销</span></button>
+            <button class="ghost compact history-btn" id="redoKeyBtn" disabled title="恢复刚刚撤销的改键">↷ <span>恢复</span></button>
+            <button class="ghost compact history-btn reset-keymap-btn" id="resetKeymapBtn" disabled title="恢复 Layer 0 的默认基础键位">恢复默认</button>
+          </div>
+        </div>
+
+        <div class="keyboard-card card">
+          <div class="keyboard-stage">
+            <div class="keyboard-board" id="physicalKeyboard"></div>
+          </div>
+        </div>
+
+        <section class="card remap-workbench">
+          <div class="remap-summary">
+            <div class="selected-key-block">
+              <div class="eyebrow small">SELECTED KEY</div>
+              <h3 id="selectedKeyLabel">尚未选择键帽</h3>
+              <p id="selectedKeyMeta">点击上面的任意键帽开始改键。</p>
+            </div>
+            <div class="remap-arrow">→</div>
+            <div class="target-key-block">
+              <span>准备改为</span>
+              <strong id="pendingKeyName">—</strong>
+              <small id="pendingKeyCode">请选择下方功能</small>
+            </div>
+            <div class="remap-actions">
+              <button class="ghost" id="cancelRemapBtn">取消更改</button>
+              <button class="primary" id="writeKeyBtn">应用改键</button>
+            </div>
+          </div>
+
+          <div class="key-picker">
+            <aside class="key-picker-sidebar" id="keyCategoryList"></aside>
+            <div class="key-picker-main">
+              <div class="key-picker-search">
+                <input id="keySearchInput" type="search" placeholder="搜索按键或功能，例如 vol、MO、空格…" autocomplete="off" />
+                <span id="keyPickerHint">基础</span>
+              </div>
+              <div class="key-picker-content" id="keyPickerContent"></div>
+            </div>
+          </div>
+
+          <details class="remap-advanced">
+            <summary>高级：Hex / Matrix</summary>
+            <div class="remap-advanced-grid">
+              <label>Keycode (hex)
+                <input id="keycodeInput" type="text" value="0x0000" spellcheck="false" />
+              </label>
+              <button class="ghost" id="useHexBtn">设为待写入</button>
+              <div class="advanced-matrix-meta" id="selectedMatrixMeta">尚未选择键帽</div>
+            </div>
+          </details>
+        </section>
+
+        <!-- 原始 Matrix 调试控件仅保留给内部协议逻辑使用，不再显示在用户界面。 -->
+        <div class="legacy-matrix-debug hidden" aria-hidden="true">
+          <input id="keyLayer" type="number" min="0" max="15" value="0" tabindex="-1" />
+          <input id="matrixRows" type="number" min="1" max="12" value="6" tabindex="-1" />
+          <input id="matrixCols" type="number" min="1" max="24" value="16" tabindex="-1" />
+          <button id="scanMatrixBtn" type="button" tabindex="-1">扫描原始矩阵</button>
+          <div id="keyMatrix" class="key-matrix empty-state"></div>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-perkeyrgb">
+        <div class="section-title">
+          <div>
+            <h2>主键盘逐键 RGB 画板</h2>
+            <p>实验功能：使用 QK / VIA 的 Per-Key RGB 扩展（Hue + Saturation）。静态帧可写入键盘；多帧可在网页预览或由网页实时推送。</p>
+          </div>
+          <div class="inline-actions">
+            <button class="ghost" id="rgbReadBtn">读取键盘静态色</button>
+            <button class="primary" id="rgbSaveStaticBtn">写入并保存当前帧</button>
+          </div>
+        </div>
+
+        <section class="embedded-lighting-block">
+          <div class="embedded-lighting-head">
+            <div><span class="eyebrow small">KEYBOARD LIGHTING</span><h3>氛围灯 / 轴灯</h3><p>普通灯效与逐键 RGB 统一放在主键盘灯光页。</p></div>
+            <button class="ghost compact" id="readKeyboardLightsBtn">读取灯光参数</button>
+          </div>
+          <div class="lighting-grid lighting-grid-embedded" id="keyboardLightingGrid"></div>
+        </section>
+
+        <div class="rgb-toolbar card">
+          <div class="rgb-tool-main">
+            <label class="rgb-color-field">画笔颜色 <input type="color" id="rgbPaintColor" value="#ff4fa3"></label>
+            <div class="rgb-palette" id="rgbPalette" aria-label="快捷颜色"></div>
+            <button class="ghost compact" id="rgbFillBtn">整帧填充</button>
+            <button class="ghost compact" id="rgbNeutralBtn" title="Per-Key 协议只有色相/饱和度，不能逐键独立亮度">整帧去饱和</button>
+          </div>
+          <div class="rgb-tool-play">
+            <label>网页预览 FPS
+              <select id="rgbPreviewFps"><option>1</option><option>2</option><option value="5" selected>5</option><option>10</option><option>15</option><option>20</option></select>
+            </label>
+            <button class="ghost" id="rgbPreviewBtn">▶ 网页预览</button>
+            <label>实时 FPS
+              <select id="rgbLiveFps"><option value="1">1</option><option value="2" selected>2</option><option value="5">5</option><option value="10">10</option></select>
+            </label>
+            <button class="primary" id="rgbLiveBtn">▶ 实时播放到键盘</button>
+          </div>
+        </div>
+
+        <div class="rgb-editor-layout">
+          <article class="card rgb-painter-card">
+            <div class="rgb-painter-head">
+              <div>
+                <strong id="rgbFrameTitle">Frame 1</strong>
+                <span id="rgbPainterStatus">左键绘制 · 拖动连续上色 · 右键设为无饱和色</span>
+              </div>
+              <div class="rgb-progress-inline"><span id="rgbWriteProgress">就绪</span></div>
+            </div>
+            <div class="rgb-keyboard-scroll">
+              <div class="rgb-keyboard-stage">
+                <div class="rgb-keyboard-board" id="rgbKeyboard"></div>
+              </div>
+            </div>
+            <div class="rgb-note">
+              <strong>注意：</strong>官方 Per-Key RGB 接口每颗键只保存 <code>Hue + Saturation</code>，亮度由“轴灯 → 亮度”全局控制，所以右键并不是单键熄灭，而是把该键设为无饱和色。实时多帧播放不会执行 SAVE，避免持续写 EEPROM；网页关闭后会停止。
+            </div>
+          </article>
+
+          <aside class="card rgb-frames-card">
+            <div class="frames-head">
+              <div><h3>动画帧</h3><p id="rgbFrameCounter">1 / 1</p></div>
+              <div class="mini-actions">
+                <button class="icon-btn" id="rgbAddFrameBtn" title="新增空白帧">＋</button>
+                <button class="icon-btn" id="rgbDuplicateFrameBtn" title="复制当前帧">⧉</button>
+                <button class="icon-btn danger" id="rgbDeleteFrameBtn" title="删除当前帧">−</button>
+              </div>
+            </div>
+            <div class="rgb-frame-list" id="rgbFrameList"></div>
+            <details class="rgb-calibration">
+              <summary>高级：LED 索引映射 / 校准</summary>
+              <p>QK80 MK2 官方 definition 没有公开 <code>li</code> 映射，因此 v0.5 默认按画面顺序使用 LED 0…N。若个别键颜色错位，可选中键后在这里改 LED Index。</p>
+              <div class="rgb-cal-row"><span>当前键</span><strong id="rgbSelectedKeyLabel">未选择</strong></div>
+              <label>LED Index <input id="rgbLedIndexInput" type="number" min="0" max="255" value="0"></label>
+              <div class="inline-actions">
+                <button class="ghost compact" id="rgbSetLedIndexBtn">保存映射</button>
+                <button class="ghost compact" id="rgbTestLedIndexBtn">闪烁测试</button>
+                <button class="ghost compact danger-text" id="rgbResetLedMapBtn">恢复默认映射</button>
+              </div>
+              <div class="rgb-map-meta" id="rgbMapMeta">默认映射：按本页物理键顺序 0…85</div>
+            </details>
+          </aside>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-matrix">
+        <div class="section-title">
+          <div><h2>7×7 自定义点阵动画</h2><p>CDC：115200 baud · 64-byte packet · C0/C1 · HSV888 row-major。</p></div>
+          <div class="inline-actions">
+            <button class="ghost" id="clearFrameBtn">清空当前帧</button>
+            <button class="primary" id="uploadMatrixBtn">保存到键盘</button>
+          </div>
+        </div>
+
+        <section class="matrix-device-strip card">
+          <div class="matrix-device-copy">
+            <span class="status-dot" id="serialDot"></span>
+            <div><strong>Web Serial / CDC</strong><small id="serialInfo">未连接</small></div>
+          </div>
+          <button class="primary" id="connectSerialBtn">连接 CDC</button>
+        </section>
+
+        <section class="embedded-lighting-block matrix-lighting-block">
+          <div class="embedded-lighting-head">
+            <div><span class="eyebrow small">DOT LIGHTING</span><h3>点阵屏普通灯效</h3><p>亮度 / 模式 / 颜色与自定义动画放在同一个专栏。</p></div>
+            <button class="ghost compact" id="readDotLightBtn">读取点阵参数</button>
+          </div>
+          <div class="lighting-grid lighting-grid-embedded lighting-grid-dot" id="matrixLightingGrid"></div>
+        </section>
+
+        <div class="matrix-layout">
+          <article class="card matrix-editor-card">
+            <div class="matrix-toolbar">
+              <label>画笔颜色 <input type="color" id="paintColor" value="#ff4fa3" /></label>
+              <label>FPS
+                <select id="fpsSelect"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option></select>
+              </label>
+              <span class="hint">左键绘制 · 右键擦除</span>
+            </div>
+            <div class="pixel-grid" id="pixelGrid" aria-label="7×7 点阵编辑器"></div>
+          </article>
+
+          <aside class="card frames-card">
+            <div class="frames-head">
+              <div><h3>帧</h3><p id="frameCounter">1 / 1</p><small class="frame-drag-hint">拖拽卡片可调整顺序</small></div>
+              <div class="mini-actions">
+                <button class="icon-btn" id="addBlankFrameBtn" title="新增空白帧">＋</button>
+                <button class="icon-btn" id="duplicateFrameBtn" title="复制当前帧">⧉</button>
+                <button class="icon-btn danger" id="deleteFrameBtn" title="删除当前帧">−</button>
+              </div>
+            </div>
+            <div class="preview-box">
+              <canvas id="matrixPreview" width="7" height="7"></canvas>
+              <button class="ghost compact" id="playPreviewBtn">▶ 预览</button>
+            </div>
+            <div class="frame-list" id="frameList"></div>
+            <div class="progress-wrap hidden" id="uploadProgressWrap">
+              <div class="progress"><div id="uploadProgress"></div></div><span id="uploadProgressText">0%</span>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+
+      <section class="tab-panel" id="tab-macro">
+        <div class="section-title">
+          <div><h2>宏 M0–M15</h2><p>QK80 MK2 当前 Protocol 0x000C 支持 VIA v11+ 宏格式：按键按下 / 松开 / Tap / 延时 / 文本。</p></div>
+          <div class="inline-actions macro-file-actions">
+            <button class="ghost" id="readMacrosBtn">从键盘读取</button>
+            <button class="ghost" id="importMacrosBtn">导入宏</button>
+            <button class="ghost" id="exportMacrosBtn">导出宏</button>
+            <button class="primary" id="saveMacrosBtn">保存全部宏</button>
+            <input id="macroFileInput" class="hidden-file" type="file" accept="application/json,.json">
+          </div>
+        </div>
+        <div class="macro-layout">
+          <aside class="card macro-list-card">
+            <div class="macro-meta"><strong id="macroCountLabel">Macro：未读取</strong><span id="macroBufferLabel">Buffer：—</span></div>
+            <div class="macro-list" id="macroList"></div>
+          </aside>
+          <article class="card macro-editor-card">
+            <div class="macro-editor-head">
+              <div><span class="eyebrow small">VISUAL MACRO EDITOR</span><h3 id="macroTitle">M0</h3></div>
+              <div class="inline-actions">
+                <label class="checkline"><input id="macroRecordDelay" type="checkbox" checked>记录延时</label>
+                <button class="ghost" id="macroAddDelayBtn">＋ 延时</button>
+                <button class="ghost" id="macroAddActionBtn">＋ 动作</button>
+                <button class="ghost" id="macroRecordBtn">● 录制</button>
+                <button class="ghost" id="macroClearBtn">清空</button>
+              </div>
+            </div>
+
+            <div class="macro-timeline" id="macroTimeline">
+              <div class="macro-empty">先读取宏，或点击“录制”开始添加键盘 / 鼠标事件。</div>
+            </div>
+
+            <details class="macro-raw-details">
+              <summary>高级：原始宏表达式</summary>
+              <textarea id="macroExpression" class="macro-expression" spellcheck="false" placeholder="例如：{+KC_LCTL}{KC_C}{-KC_LCTL}{100}hello"></textarea>
+              <div class="macro-help">
+                <span>Tap：<code>{KC_A}</code></span><span>按下：<code>{+KC_LCTL}</code></span><span>松开：<code>{-KC_LCTL}</code></span><span>延时：<code>{100}</code></span>
+                <span>鼠标：<code>{KC_MS_BTN1}</code> / <code>{KC_MS_WH_UP}</code></span>
+              </div>
+            </details>
+
+            <div class="macro-status" id="macroStatus">先点击“从键盘读取”。</div>
+
+            <div class="macro-action-overlay hidden" id="macroActionOverlay">
+              <div class="macro-action-dialog" role="dialog" aria-modal="true" aria-labelledby="macroActionTitle">
+                <div class="macro-action-head">
+                  <div>
+                    <span class="eyebrow small">MACRO ACTION</span>
+                    <h3 id="macroActionTitle">编辑动作</h3>
+                  </div>
+                  <button class="macro-action-close" id="macroActionCloseBtn" type="button" aria-label="关闭">×</button>
+                </div>
+                <div class="macro-action-tabs" id="macroActionTabs">
+                  <button type="button" data-action-type="key" class="active">按键 / 鼠标</button>
+                  <button type="button" data-action-type="delay">延时</button>
+                  <button type="button" data-action-type="text">文本</button>
+                </div>
+                <div class="macro-action-panel" data-action-panel="key">
+                  <label class="field">
+                    <span>动作</span>
+                    <select id="macroActionKeyAction">
+                      <option value="tap">单击 / Tap</option>
+                      <option value="down">按下</option>
+                      <option value="up">松开</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>按键 / 鼠标功能</span>
+                    <input id="macroActionKeyName" list="macroKeyDatalist" autocomplete="off" placeholder="例如 KC_A、KC_MS_BTN1">
+                    <datalist id="macroKeyDatalist"></datalist>
+                  </label>
+                  <div class="macro-action-hint">支持键盘键、鼠标左/右/中键、侧键、滚轮和鼠标移动 Keycode。</div>
+                </div>
+                <div class="macro-action-panel hidden" data-action-panel="delay">
+                  <label class="field">
+                    <span>延时（毫秒）</span>
+                    <input id="macroActionDelay" type="number" min="1" max="9999" step="1" value="100">
+                  </label>
+                </div>
+                <div class="macro-action-panel hidden" data-action-panel="text">
+                  <label class="field">
+                    <span>文本</span>
+                    <input id="macroActionText" type="text" placeholder="输入 ASCII 文本">
+                  </label>
+                </div>
+                <div class="macro-action-footer">
+                  <span id="macroActionPosition">—</span>
+                  <div class="inline-actions">
+                    <button class="ghost" id="macroActionCancelBtn" type="button">取消</button>
+                    <button class="primary" id="macroActionSaveBtn" type="button">确定</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="macro-recorder-overlay hidden" id="macroRecorderOverlay">
+              <div class="macro-recorder-box">
+                <div class="macro-recorder-title-row">
+                  <div class="record-pulse"></div>
+                  <div>
+                    <h3>正在录制 M<span id="macroRecorderIndex">0</span></h3>
+                    <p>按下的键会实时显示在下面，不用停止录制也能检查顺序。</p>
+                  </div>
+                  <strong class="macro-recorder-count" id="macroRecorderCount">0 个新动作</strong>
+                </div>
+                <div class="macro-recorder-last" id="macroRecorderLast">等待输入…</div>
+                <div class="macro-recorder-live" id="macroRecorderPreview" aria-live="polite">
+                  <div class="macro-recorder-empty">等待键盘 / 鼠标输入…</div>
+                </div>
+                <p class="macro-recorder-note">键盘按键会直接捕获；录制鼠标按键或滚轮时，请在弹窗外的灰色区域操作。鼠标移动轨迹不会录制。</p>
+                <button class="primary macro-recorder-stop" id="macroStopOverlayBtn">■ 停止录制</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-profile">
+        <div class="section-title">
+          <div><h2>Profile 保存 / 加载</h2><p>把 Layer、宏、灯光、设备设置与当前点阵编辑器帧保存成一个 CHISA QK80 MK2 Profile。</p></div>
+        </div>
+        <div class="profile-grid">
+          <article class="card profile-card">
+            <h3>备份当前键盘</h3><p>从键盘读取 4 个 Layer、Macro、灯光与 MAGIC / FEATURES / 连接参数。</p>
+            <label class="field">Profile 名称<input id="profileName" value="QK80-MK2-Profile" /></label>
+            <button class="primary" id="exportProfileBtn">读取并导出 .json</button>
+            <div class="profile-status" id="profileExportStatus">尚未导出</div>
+          </article>
+          <article class="card profile-card">
+            <h3>载入 Profile</h3><p>先选择 JSON，再检查摘要。连接模式和点阵动画默认不会自动覆盖。</p>
+            <input id="profileFileInput" type="file" accept="application/json,.json" />
+            <div class="profile-summary" id="profileSummary">尚未选择文件</div>
+            <label class="checkline"><input id="profileApplyConnection" type="checkbox">同时应用连接模式（可能立即断开）</label>
+            <label class="checkline"><input id="profileApplyMatrix" type="checkbox">同时上传 Profile 中的 7×7 动画（需要 CDC）</label>
+            <button class="primary" id="applyProfileBtn" disabled>应用到键盘</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-device">
+        <div class="section-title">
+          <div><h2>设备设置</h2><p>参数映射来自 QK80 MK2 官方 VIA definition；修改后会写入对应 Custom Menu channel。</p></div>
+          <button class="ghost" id="readDeviceSettingsBtn">读取全部设置</button>
+        </div>
+        <div class="device-settings-grid">
+          <article class="card setting-card">
+            <h3>MAGIC</h3>
+            <label class="toggle-row"><span><strong>全键无冲 NKRO</strong><small>Channel 19 / ID 1</small></span><input id="magicNkro" type="checkbox"></label>
+            <label class="toggle-row"><span><strong>Win / GUI 键开关</strong><small>Channel 19 / ID 2</small></span><input id="magicGui" type="checkbox"></label>
+            <label class="toggle-row"><span><strong>Alt / GUI 互换</strong><small>Channel 19 / ID 3</small></span><input id="magicAltGui" type="checkbox"></label>
+            <label class="toggle-row"><span><strong>Caps → Ctrl</strong><small>Channel 19 / ID 4</small></span><input id="magicCapsCtrl" type="checkbox"></label>
+            <button class="primary" id="saveMagicBtn">保存 MAGIC</button>
+          </article>
+          <article class="card setting-card">
+            <h3>FEATURES</h3>
+            <label class="toggle-row"><span><strong>LED 总电源</strong><small>Channel 17 / ID 1</small></span><input id="featureLedPower" type="checkbox"></label>
+            <label class="field">休眠时间<select id="featureSleep"><option value="0">Disable</option><option value="1">5 minutes</option><option value="2">15 minutes</option><option value="3">30 minutes</option><option value="4">1 hour</option><option value="5">3 hours</option><option value="6">6 hours</option></select></label>
+            <label class="field">按键去抖模式<select id="featureDebounceMode"><option value="0">Default</option><option value="3">Eager</option></select></label>
+            <label class="field">去抖时间<select id="featureDebounceDelay"><option value="1">1 ms</option><option value="2">2 ms</option><option value="3">3 ms</option><option value="4">4 ms</option><option value="5">5 ms</option><option value="6">6 ms</option><option value="7">7 ms</option></select></label>
+            <button class="primary" id="saveFeaturesBtn">保存 FEATURES</button>
+          </article>
+          <article class="card setting-card">
+            <h3>日期 / 时间</h3>
+            <div class="clock" id="browserClock">—</div><p>按官方实现写入 Channel 25：本地 Unix 时间（已补偿时区）。</p>
+            <button class="primary" id="syncTimeBtn">同步电脑时间</button>
+          </article>
+          <article class="card setting-card">
+            <h3>连接</h3>
+            <label class="field">连接模式<select id="connectMode"><option value="0">USB</option><option value="1">Wireless 2.4G</option><option value="2">Bluetooth G1</option><option value="3">Bluetooth G2</option><option value="4">Bluetooth G3</option></select></label>
+            <button class="primary" id="saveConnectModeBtn">切换连接模式</button>
+            <div class="danger-actions"><button class="ghost danger-text" id="clearCurrentBindBtn">删除当前绑定</button><button class="ghost danger-text" id="clearAllBindsBtn">删除全部蓝牙绑定</button><button class="ghost danger-text" id="receiverDfuBtn">2.4G Receiver DFU</button></div>
+            <p class="setting-note">切出 USB 后网页 HID / CDC 可能立即断开，这是正常现象。</p>
+          </article>
+          <article class="card setting-card danger-card">
+            <h3>EEPROM Reset</h3><p>清空 VIA 动态配置、键位、宏等设置。执行后通常需要重新插拔键盘。</p>
+            <label class="field">输入 RESET 确认<input id="resetConfirm" placeholder="RESET" autocomplete="off" /></label>
+            <button class="danger-button" id="eepromResetBtn">清空键盘配置</button>
+          </article>
+        </div>
+      </section>
+
+
+      <section class="tab-panel" id="tab-appearance">
+        <div class="section-title">
+          <div>
+            <h2>界面样式</h2>
+            <p>主题、选中键高亮、整体主色与背景都只保存在当前浏览器本地；清除该站点数据后会恢复默认。</p>
+          </div>
+          <button class="ghost" id="appearanceResetBtn">恢复默认主题</button>
+        </div>
+
+        <div class="appearance-layout">
+          <article class="card appearance-card appearance-presets-card">
+            <div class="appearance-card-head"><div><span class="appearance-kicker">PRESETS</span><h3>主题预设</h3></div><span id="appearancePresetLabel" class="appearance-current">Angry Lime</span></div>
+            <div class="theme-preset-grid" id="themePresetGrid">
+              <button class="theme-preset active" data-theme-preset="lime"><i style="--p1:#e9eef0;--p2:#caff00;--p3:#111719"></i><strong>Angry Lime</strong><small>冷灰 / 荧光绿</small></button>
+              <button class="theme-preset" data-theme-preset="rose"><i style="--p1:#f6edef;--p2:#ff8fb1;--p3:#34272c"></i><strong>Chisa Rose</strong><small>浅粉 / 莓果</small></button>
+              <button class="theme-preset" data-theme-preset="ocean"><i style="--p1:#e8f1f7;--p2:#4bbcff;--p3:#10222e"></i><strong>Ocean</strong><small>雾蓝 / 天蓝</small></button>
+              <button class="theme-preset" data-theme-preset="violet"><i style="--p1:#1c1a25;--p2:#b69cff;--p3:#f6f2ff"></i><strong>Violet Night</strong><small>深紫 / 淡紫</small></button>
+              <button class="theme-preset" data-theme-preset="carbon"><i style="--p1:#121719;--p2:#ff7a45;--p3:#f1f5f6"></i><strong>Carbon</strong><small>深灰 / 橙红</small></button>
+            </div>
+          </article>
+
+          <article class="card appearance-card">
+            <div class="appearance-card-head"><div><span class="appearance-kicker">COLORS</span><h3>自定义颜色</h3></div><span class="appearance-current">实时保存</span></div>
+            <div class="appearance-color-grid">
+              <label><span>整体主色<small>按钮 / 当前导航</small></span><input type="color" id="appearanceAccent" value="#caff00"></label>
+              <label><span>选中键颜色<small>可视化改键高亮</small></span><input type="color" id="appearanceKeySelect" value="#caff00"></label>
+              <label><span>页面背景色<small>无背景图时使用</small></span><input type="color" id="appearanceBg" value="#e9eef0"></label>
+              <label><span>面板颜色<small>卡片 / 设置区域</small></span><input type="color" id="appearancePanel" value="#f5f7f8"></label>
+            </div>
+            <label class="appearance-select-row"><span>文字明暗<small>自定义深色背景时可手动切换</small></span><select id="appearanceTextMode"><option value="auto">自动判断</option><option value="light">深色文字</option><option value="dark">浅色文字</option></select></label>
+          </article>
+
+          <article class="card appearance-card appearance-background-card">
+            <div class="appearance-card-head"><div><span class="appearance-kicker">BACKGROUND</span><h3>自定义背景</h3></div><span id="appearanceBgState" class="appearance-current">未设置图片</span></div>
+            <div class="appearance-background-body">
+              <div class="appearance-bg-preview" id="appearanceBgPreview"><div><strong>LOCAL BACKGROUND</strong><span>图片只保存在当前浏览器</span></div></div>
+              <div class="appearance-bg-controls">
+                <div class="appearance-upload-row">
+                  <button class="primary" id="appearanceUploadBgBtn">上传背景图片</button>
+                  <button class="ghost danger-text" id="appearanceClearBgBtn">清除背景图片</button>
+                  <input id="appearanceBgFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+                </div>
+                <label class="appearance-select-row"><span>显示方式</span><select id="appearanceBgFit"><option value="cover">铺满 Cover</option><option value="contain">完整显示 Contain</option><option value="auto">原始尺寸 Auto</option></select></label>
+                <label class="appearance-select-row"><span>背景位置</span><select id="appearanceBgPosition"><option value="center center">居中</option><option value="center top">顶部居中</option><option value="center bottom">底部居中</option><option value="left center">左侧</option><option value="right center">右侧</option></select></label>
+                <label class="appearance-range-row"><span>图片可见度 <output id="appearanceBgOpacityValue">35%</output></span><input id="appearanceBgOpacity" type="range" min="5" max="100" value="35"></label>
+                <label class="appearance-range-row"><span>背景模糊 <output id="appearanceBgBlurValue">0 px</output></span><input id="appearanceBgBlur" type="range" min="0" max="24" value="0"></label>
+              </div>
+            </div>
+            <div class="appearance-local-note"><strong>本地保存说明</strong><span>主题参数保存在 localStorage，背景图片保存在 IndexedDB。部署到正式网页后，每个浏览器 / 每台设备各自保存一份；清除浏览器记录、站点数据或无痕模式结束后，需要重新上传背景。</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-debug">
+        <div class="section-title">
+          <div><h2>调试日志</h2><p>显示本页发出的 HID / CDC 数据，方便继续逆向。</p></div>
+          <button class="ghost" id="clearLogBtn">清空日志</button>
+        </div>
+        <pre class="log" id="debugLog"></pre>
+      </section>
+    </main>
+
+    <footer>
+      <span>QK80 MK2 Web Driver v1.0.0</span>
+      <span>使用前请关闭 QK 官方网页；COM 串口同一时间只能由一个页面占用。</span>
+    </footer>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
