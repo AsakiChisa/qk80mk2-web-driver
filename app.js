@@ -33,7 +33,11 @@
 
   const CHANNEL = { AMBIENT: 0x15, AXIS: 0x16, DOT: 0x1a, FEATURES: 0x11, CONNECT: 0x12, MAGIC: 0x13, DATETIME: 0x19 };
   const PARAM = { BRIGHTNESS: 0x01, EFFECT: 0x02, SPEED: 0x03, COLOR: 0x04 };
-  const CDC_CMD = { MATRIX_INIT: 0xc0, MATRIX_DATA: 0xc1 };
+  const CDC_CMD = { MATRIX_INIT: 0xc0, MATRIX_DATA: 0xc1, FILE_INIT: 0xe0, FILE_DATA: 0xe1, FILE_CANCEL: 0xe2 };
+  const SCREEN_WIDTH = 320;
+  const SCREEN_HEIGHT = 172;
+  const SCREEN_FRAME_BYTES = SCREEN_WIDTH * SCREEN_HEIGHT * 2;
+  const SCREEN_MAX_FRAMES = 500;
 
   // QK80 MK2 / QMK lighting mode tables, verified against the original QK UI.
   // 0x15 uses the classic RGBLIGHT mode numbering; 0x16 uses RGB Matrix mode numbering.
@@ -64,6 +68,7 @@
     'probeBtn','protocolValue','layersValue','cdcValue','keyboardLightingGrid','matrixLightingGrid','readKeyboardLightsBtn','readDotLightBtn','pixelGrid','paintColor','fpsSelect',
     'frameList','frameCounter','addBlankFrameBtn','duplicateFrameBtn','deleteFrameBtn','clearFrameBtn','uploadMatrixBtn',
     'uploadProgressWrap','uploadProgress','uploadProgressText','matrixPreview','playPreviewBtn','layerTabs','physicalKeyboard',
+    'screenSerialDot','screenSerialInfo','screenConnectSerialBtn','screenModeTabs','screenDropzone','screenPreview','screenVideoPreview','screenFileName','screenFileMeta','screenPickFilesBtn','screenPickFolderBtn','screenFileInput','screenFolderInput','screenAlbumStrip','screenDestination','screenFit','screenVideoFps','screenAlbumInterval','screenAlbumTransition','screenSaveBtn','screenCancelBtn','screenProgressWrap','screenProgress','screenProgressText','screenStatus',
     'readPhysicalBtn','physicalStatus','selectedKeyLabel','selectedKeyMeta','pendingKeyName','pendingKeyCode','keyCategoryList',
     'keySearchInput','keyPickerHint','keyPickerContent','cancelRemapBtn','useHexBtn','selectedMatrixMeta','keyLayer','matrixRows','matrixCols',
     'scanMatrixBtn','keyMatrix','keycodeInput','writeKeyBtn','undoKeyBtn','redoKeyBtn','resetKeymapBtn','debugLog','clearLogBtn','toast',
@@ -118,6 +123,11 @@
   let rgbLiveStats = { actualFps: 0, frame: 0, keys: 0, latency: 0, dropped: 0 };
   let rgbV2Session = 0;
   let rgbV2Takeover = false;
+  let screenMode = 'image';
+  let screenFiles = [];
+  let screenPreviewUrls = [];
+  let screenTransferCancel = false;
+  let screenTransferBusy = false;
   let rgbWorkspaceSaveTimer = null;
   let rgbLastDiagnostics = null;
   let rgbPerKeySupport = null;
@@ -216,7 +226,9 @@
   function log(tag, message, bytes) {
     const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
     const suffix = bytes ? `\n    ${hexBytes(bytes)}` : '';
-    els.debugLog.textContent += `[${time}] ${tag} ${message}${suffix}\n`;
+    const line = `[${time}] ${tag} ${message}${suffix}\n`;
+    const current = els.debugLog.textContent;
+    els.debugLog.textContent = (current.length > 80000 ? current.slice(-60000) : current) + line;
     els.debugLog.scrollTop = els.debugLog.scrollHeight;
   }
 
@@ -388,8 +400,11 @@
     serialPort = port;
     const info = port.getInfo();
     setDot(els.serialDot, true);
+    setDot(els.screenSerialDot, true);
     els.serialInfo.textContent = `CDC · ${BAUD} baud · 64 bytes · 0x${(info.usbVendorId || 0).toString(16)}:0x${(info.usbProductId || 0).toString(16)}`;
+    if (els.screenSerialInfo) els.screenSerialInfo.textContent = `CDC 已连接 · ${BAUD} baud · E0/E1/E2`;
     els.connectSerialBtn.textContent = 'CDC 已连接';
+    if (els.screenConnectSerialBtn) els.screenConnectSerialBtn.textContent = 'CDC 已连接';
     els.cdcValue.textContent = '已连接';
     toast('CDC 已连接');
   }
@@ -410,9 +425,11 @@
     }
     pendingHid.forEach(x => { clearTimeout(x.timer); x.reject?.(new Error('连接已断开')); });
     pendingHid = [];
-    setDot(els.hidDot, false); setDot(els.serialDot, false);
+    setDot(els.hidDot, false); setDot(els.serialDot, false); setDot(els.screenSerialDot, false);
     els.hidInfo.textContent = '未连接'; els.serialInfo.textContent = '未连接';
     els.connectHidBtn.textContent = '连接 HID'; els.connectSerialBtn.textContent = '连接 CDC';
+    if (els.screenConnectSerialBtn) els.screenConnectSerialBtn.textContent = '连接 CDC';
+    if (els.screenSerialInfo) els.screenSerialInfo.textContent = '使用同一个 Web Serial / CDC 连接';
     els.cdcValue.textContent = '—';
     rgbV2Takeover = false;
     toast('已断开连接');
@@ -420,7 +437,7 @@
 
   function numIntoBytes(num) { return [(num >>> 24) & 0xff, (num >>> 16) & 0xff, (num >>> 8) & 0xff, num & 0xff]; }
 
-  async function readSerial64() {
+  async function readSerial64(writeLog = true) {
     if (!serialPort?.readable) throw new Error('CDC 不可读。');
     const reader = serialPort.readable.getReader();
     const out = [];
@@ -432,7 +449,7 @@
       }
     } finally { reader.releaseLock(); }
     const result = new Uint8Array(out.slice(0, CDC_PACKET_SIZE));
-    log('CDC IN', `${result.length} bytes`, result);
+    if (writeLog) log('CDC IN', `${result.length} bytes`, result);
     if (result.length !== CDC_PACKET_SIZE) throw new Error(`CDC 回包长度异常：${result.length}`);
     return result;
   }
@@ -498,6 +515,275 @@
     await setCustom(CHANNEL.DOT, PARAM.EFFECT, [0x04]);
     setUploadProgress(raw.length, raw.length);
     toast(`点阵已保存：${frames.length} 帧 / ${fps} FPS · CDC`);
+  }
+
+  function setScreenProgress(done, total, label = '') {
+    const pct = total ? Math.max(0, Math.min(100, Math.round(done / total * 100))) : 0;
+    els.screenProgressWrap?.classList.remove('hidden');
+    if (els.screenProgress) els.screenProgress.style.width = `${pct}%`;
+    if (els.screenProgressText) els.screenProgressText.textContent = label ? `${pct}% · ${label}` : `${pct}%`;
+  }
+
+  function clearScreenPreviewUrls() {
+    screenPreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    screenPreviewUrls = [];
+  }
+
+  function screenMagic() {
+    const theme = els.screenDestination?.value === 'theme';
+    if (screenMode === 'image') return theme ? 'ABKT' : 'ABKG';
+    if (screenMode === 'video') return theme ? 'ANIT' : 'ANIM';
+    return theme ? 'ANPT' : 'ANPS';
+  }
+
+  function screenFrameLimit() {
+    return els.screenDestination?.value === 'theme' ? 300 : SCREEN_MAX_FRAMES;
+  }
+
+  function setScreenMode(mode) {
+    screenMode = mode;
+    screenFiles = [];
+    clearScreenPreviewUrls();
+    els.screenModeTabs?.querySelectorAll('[data-screen-mode]').forEach(button => button.classList.toggle('active', button.dataset.screenMode === mode));
+    document.querySelectorAll('.screen-video-option').forEach(el => el.classList.toggle('hidden', mode !== 'video'));
+    document.querySelectorAll('.screen-album-option').forEach(el => el.classList.toggle('hidden', mode !== 'album'));
+    els.screenPickFolderBtn?.classList.toggle('hidden', mode !== 'album');
+    els.screenAlbumStrip?.classList.toggle('hidden', mode !== 'album');
+    if (els.screenFileInput) {
+      els.screenFileInput.multiple = mode === 'album';
+      els.screenFileInput.accept = mode === 'video' ? 'image/gif,video/mp4' : 'image/png,image/jpeg,image/bmp';
+      els.screenFileInput.value = '';
+    }
+    if (els.screenFolderInput) els.screenFolderInput.value = '';
+    if (els.screenPickFilesBtn) els.screenPickFilesBtn.textContent = mode === 'album' ? '选择多张图片' : '选择文件';
+    if (els.screenFileName) els.screenFileName.textContent = mode === 'image' ? '选择图片开始' : mode === 'video' ? '选择 GIF 或 MP4 开始' : '选择多张图片或文件夹开始';
+    if (els.screenFileMeta) els.screenFileMeta.textContent = mode === 'album' ? `相册按文件名排序，当前保存位置最多 ${screenFrameLimit()} 张。` : '输出固定为 320 × 172 RGB565。';
+    if (els.screenAlbumStrip) els.screenAlbumStrip.innerHTML = '';
+    if (els.screenPreview) {
+      els.screenPreview.classList.remove('hidden');
+      const ctx = els.screenPreview.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    }
+    if (els.screenVideoPreview) { els.screenVideoPreview.pause(); els.screenVideoPreview.removeAttribute('src'); els.screenVideoPreview.classList.add('hidden'); }
+    if (els.screenSaveBtn) els.screenSaveBtn.disabled = true;
+    if (els.screenStatus) els.screenStatus.textContent = '素材只在本机浏览器中处理，不会上传到网络。';
+    els.screenProgressWrap?.classList.add('hidden');
+  }
+
+  function drawScreenSource(source, canvas = els.screenPreview) {
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const sw = source.videoWidth || source.naturalWidth || source.displayWidth || source.width;
+    const sh = source.videoHeight || source.naturalHeight || source.displayHeight || source.height;
+    if (!sw || !sh) throw new Error('无法读取素材尺寸。');
+    const fit = els.screenFit?.value || 'cover';
+    let sx = 0, sy = 0, sWidth = sw, sHeight = sh, dx = 0, dy = 0, dWidth = SCREEN_WIDTH, dHeight = SCREEN_HEIGHT;
+    if (fit === 'cover') {
+      const sourceRatio = sw / sh, targetRatio = SCREEN_WIDTH / SCREEN_HEIGHT;
+      if (sourceRatio > targetRatio) { sWidth = sh * targetRatio; sx = (sw - sWidth) / 2; }
+      else { sHeight = sw / targetRatio; sy = (sh - sHeight) / 2; }
+    } else if (fit === 'contain') {
+      const scale = Math.min(SCREEN_WIDTH / sw, SCREEN_HEIGHT / sh);
+      dWidth = sw * scale; dHeight = sh * scale; dx = (SCREEN_WIDTH - dWidth) / 2; dy = (SCREEN_HEIGHT - dHeight) / 2;
+    }
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    ctx.drawImage(source, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
+  }
+
+  function canvasToRgb565(canvas = els.screenPreview) {
+    const rgba = canvas.getContext('2d', { alpha: false }).getImageData(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT).data;
+    const out = new Uint8Array(SCREEN_FRAME_BYTES);
+    for (let i = 0, j = 0; i < rgba.length; i += 4, j += 2) {
+      const value = ((rgba[i] & 0xf8) << 8) | ((rgba[i + 1] & 0xfc) << 3) | (rgba[i + 2] >> 3);
+      out[j] = value & 0xff; out[j + 1] = value >>> 8;
+    }
+    return out;
+  }
+
+  function makeScreenContainer(magic, frameBuffers, metadata = []) {
+    const dataOffset = 20 + metadata.length * 2;
+    const total = dataOffset + frameBuffers.length * SCREEN_FRAME_BYTES;
+    const out = new Uint8Array(total);
+    const view = new DataView(out.buffer);
+    for (let i = 0; i < 4; i++) out[i] = magic.charCodeAt(i);
+    view.setUint16(4, 20, true);
+    view.setUint16(6, dataOffset, true);
+    view.setUint32(8, total, true);
+    view.setUint16(12, SCREEN_WIDTH, true);
+    view.setUint16(14, SCREEN_HEIGHT, true);
+    view.setUint16(16, 0, true);
+    view.setUint16(18, frameBuffers.length, true);
+    metadata.forEach((value, index) => view.setUint16(20 + index * 2, Math.max(0, Math.min(65535, Math.round(value))), true));
+    let offset = dataOffset;
+    for (const frame of frameBuffers) { out.set(frame, offset); offset += frame.length; }
+    return out;
+  }
+
+  async function decodeScreenImage(file) {
+    const bitmap = await createImageBitmap(file);
+    try { drawScreenSource(bitmap); return canvasToRgb565(); }
+    finally { bitmap.close(); }
+  }
+
+  async function decodeScreenGif(file) {
+    if (!('ImageDecoder' in window)) throw new Error('当前浏览器不支持 GIF 逐帧解码，请使用最新版 Chrome 或 Edge。');
+    const decoder = new ImageDecoder({ data: new Uint8Array(await file.arrayBuffer()), type: file.type || 'image/gif' });
+    await decoder.tracks.ready;
+    const count = Math.min(screenFrameLimit(), decoder.tracks.selectedTrack.frameCount || 1);
+    const output = [], durations = [];
+    try {
+      for (let i = 0; i < count; i++) {
+        if (screenTransferCancel) throw new Error('用户已取消。');
+        const { image } = await decoder.decode({ frameIndex: i, completeFramesOnly: true });
+        try { drawScreenSource(image); output.push(canvasToRgb565()); durations.push(Math.max(10, Math.round((image.duration || 100000) / 1000))); }
+        finally { image.close(); }
+        setScreenProgress(i + 1, count, `正在处理 GIF ${i + 1}/${count}`);
+        if ((i & 3) === 3) await new Promise(requestAnimationFrame);
+      }
+    } finally { decoder.close(); }
+    return { frames: output, durations };
+  }
+
+  async function seekVideo(video, time) {
+    if (Math.abs(video.currentTime - time) < 0.001 && video.readyState >= 2) return;
+    await new Promise((resolve, reject) => {
+      const done = () => { cleanup(); resolve(); }, fail = () => { cleanup(); reject(new Error('视频定位失败。')); };
+      const cleanup = () => { video.removeEventListener('seeked', done); video.removeEventListener('error', fail); };
+      video.addEventListener('seeked', done, { once: true }); video.addEventListener('error', fail, { once: true }); video.currentTime = time;
+    });
+  }
+
+  async function decodeScreenVideo(file) {
+    const url = URL.createObjectURL(file), video = document.createElement('video');
+    video.muted = true; video.preload = 'auto'; video.src = url;
+    try {
+      await new Promise((resolve, reject) => { video.onloadeddata = resolve; video.onerror = () => reject(new Error('无法解码 MP4，请使用浏览器支持的 H.264 MP4。')); });
+      const fps = Number(els.screenVideoFps?.value || 10);
+      const count = Math.min(screenFrameLimit(), Math.max(1, Math.ceil(video.duration * fps)));
+      const duration = Math.max(10, Math.round(1000 / fps)), output = [], durations = [];
+      for (let i = 0; i < count; i++) {
+        if (screenTransferCancel) throw new Error('用户已取消。');
+        await seekVideo(video, Math.min(video.duration, i / fps));
+        drawScreenSource(video); output.push(canvasToRgb565()); durations.push(duration);
+        setScreenProgress(i + 1, count, `正在处理视频 ${i + 1}/${count}`);
+        if ((i & 1) === 1) await new Promise(requestAnimationFrame);
+      }
+      return { frames: output, durations };
+    } finally { URL.revokeObjectURL(url); video.removeAttribute('src'); video.load(); }
+  }
+
+  async function buildScreenFile() {
+    if (!screenFiles.length) throw new Error('请先选择素材。');
+    const magic = screenMagic();
+    if (screenMode === 'image') return makeScreenContainer(magic, [await decodeScreenImage(screenFiles[0])]);
+    if (screenMode === 'video') {
+      const file = screenFiles[0];
+      const decoded = file.type === 'image/gif' ? await decodeScreenGif(file) : await decodeScreenVideo(file);
+      return makeScreenContainer(magic, decoded.frames, decoded.durations);
+    }
+    const chosen = screenFiles.slice(0, screenFrameLimit()), output = [];
+    for (let i = 0; i < chosen.length; i++) {
+      if (screenTransferCancel) throw new Error('用户已取消。');
+      output.push(await decodeScreenImage(chosen[i]));
+      setScreenProgress(i + 1, chosen.length, `正在处理相册 ${i + 1}/${chosen.length}`);
+      if ((i & 3) === 3) await new Promise(requestAnimationFrame);
+    }
+    return makeScreenContainer(magic, output, [Number(els.screenAlbumInterval?.value || 5), Number(els.screenAlbumTransition?.value || 1)]);
+  }
+
+  async function uploadScreenFile(bytes) {
+    if (!serialPort?.writable) throw new Error('请先连接 CDC。');
+    const initArgs = Array.from(bytes.slice(0, 20));
+    const initResp = await serialCommand(CDC_CMD.FILE_INIT, initArgs, true);
+    if (initResp[21] === 0xee) throw new Error(`键盘拒绝屏幕文件（状态 0x${hexByte(initResp[22] || 0)}）。`);
+    const ackEachChunk = !!initResp[22];
+    const writer = serialPort.writable.getWriter();
+    const packet = new Uint8Array(CDC_PACKET_SIZE);
+    let lastPercent = -1;
+    log('CDC OUT', `E1 屏幕数据开始 · ${bytes.length} bytes · ${ackEachChunk ? '逐包 ACK' : '连续模式'}`);
+    try {
+      for (let offset = 0; offset < bytes.length; offset += CDC_PAYLOAD_SIZE) {
+        if (screenTransferCancel) {
+          writer.releaseLock();
+          await serialCommand(CDC_CMD.FILE_CANCEL);
+          throw new Error('传输已取消。');
+        }
+        const chunk = bytes.subarray(offset, Math.min(offset + CDC_PAYLOAD_SIZE, bytes.length));
+        packet.fill(0);
+        packet[0] = CDC_CMD.FILE_DATA;
+        packet[1] = (offset >>> 24) & 0xff;
+        packet[2] = (offset >>> 16) & 0xff;
+        packet[3] = (offset >>> 8) & 0xff;
+        packet[4] = offset & 0xff;
+        packet[5] = chunk.length;
+        packet.set(chunk, 6);
+        await writer.write(packet);
+        if (ackEachChunk) {
+          const response = await readSerial64(false);
+          for (let i = 0; i < 5 + chunk.length; i++) {
+            if (response[i] !== packet[i]) throw new Error(`CDC 屏幕数据回显不一致 @${offset}+${i}`);
+          }
+        }
+        const done = offset + chunk.length;
+        const percent = Math.floor(done / bytes.length * 100);
+        if (percent !== lastPercent || done === bytes.length) {
+          lastPercent = percent;
+          setScreenProgress(done, bytes.length, '正在写入键盘');
+        }
+      }
+    } finally {
+      if (writer.locked !== false) {
+        try { writer.releaseLock(); } catch {}
+      }
+    }
+    log('CDC OUT', `E1 屏幕数据完成 · ${bytes.length} bytes`);
+  }
+
+  async function saveScreenMedia() {
+    if (screenTransferBusy) return;
+    if (!serialPort?.writable) await connectSerial(false);
+    const destination = els.screenDestination?.value === 'theme' ? '当前主题槽' : '自定义槽';
+    if (!confirm(`将覆盖键盘屏幕的${destination}，并写入键盘本地存储。断开网页后仍会保留。\n\n确定继续吗？`)) return;
+    screenTransferBusy = true; screenTransferCancel = false;
+    els.screenSaveBtn.disabled = true; els.screenCancelBtn?.classList.remove('hidden');
+    els.screenStatus.textContent = '正在本地处理素材…'; setScreenProgress(0, 1, '准备中');
+    try {
+      const bytes = await buildScreenFile();
+      if (screenTransferCancel) throw new Error('用户已取消。');
+      els.screenStatus.textContent = `已生成 ${screenMagic()} · ${(bytes.length / 1024 / 1024).toFixed(2)} MB，正在传输…`;
+      await uploadScreenFile(bytes);
+      setScreenProgress(1, 1, '完成');
+      els.screenStatus.textContent = `保存完成：${screenMagic()} · ${screenFiles.length} 个源文件 · ${(bytes.length / 1024 / 1024).toFixed(2)} MB`;
+      toast('屏幕素材已保存到键盘');
+    } finally {
+      screenTransferBusy = false; els.screenCancelBtn?.classList.add('hidden'); els.screenSaveBtn.disabled = !screenFiles.length;
+    }
+  }
+
+  async function selectScreenFiles(fileList) {
+    const files = Array.from(fileList || []);
+    const allowed = screenMode === 'video' ? files.filter(file => file.type === 'image/gif' || file.type === 'video/mp4') : files.filter(file => ['image/png', 'image/jpeg', 'image/bmp'].includes(file.type));
+    screenFiles = (screenMode === 'album' ? allowed.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })) : allowed.slice(0, 1)).slice(0, screenFrameLimit());
+    clearScreenPreviewUrls();
+    if (!screenFiles.length) throw new Error('没有找到当前模式支持的文件。');
+    els.screenFileName.textContent = screenMode === 'album' ? `${screenFiles.length} 张图片` : screenFiles[0].name;
+    els.screenFileMeta.textContent = `${screenFiles.map(file => file.name).slice(0, 3).join('、')}${screenFiles.length > 3 ? '…' : ''}`;
+    els.screenSaveBtn.disabled = false;
+    if (screenMode === 'video') {
+      const url = URL.createObjectURL(screenFiles[0]); screenPreviewUrls.push(url);
+      els.screenVideoPreview.src = url; els.screenVideoPreview.classList.remove('hidden'); els.screenPreview.classList.add('hidden');
+      await els.screenVideoPreview.play().catch(() => {});
+    } else {
+      const bitmap = await createImageBitmap(screenFiles[0]);
+      try { drawScreenSource(bitmap); } finally { bitmap.close(); }
+      els.screenPreview.classList.remove('hidden'); els.screenVideoPreview.classList.add('hidden');
+      if (screenMode === 'album') {
+        els.screenAlbumStrip.innerHTML = '';
+        for (const file of screenFiles.slice(0, 40)) {
+          const img = document.createElement('img'), url = URL.createObjectURL(file); screenPreviewUrls.push(url); img.src = url; img.alt = file.name; img.title = file.name; els.screenAlbumStrip.appendChild(img);
+        }
+      }
+    }
+    els.screenStatus.textContent = '素材已就绪；点击保存后才会写入键盘。';
   }
 
   function setUploadProgress(done,total) {
@@ -2336,6 +2622,21 @@
   function bindUI(){
     document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===btn));document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id===`tab-${btn.dataset.tab}`));}));
     els.connectHidBtn.addEventListener('click',()=>safe(()=>connectHid(true)));els.connectSerialBtn.addEventListener('click',()=>safe(()=>connectSerial(true)));els.disconnectBtn.addEventListener('click',()=>safe(disconnectAll));els.probeBtn.addEventListener('click',()=>safe(probeDevice));
+    els.screenConnectSerialBtn?.addEventListener('click',()=>safe(()=>connectSerial(true)));
+    els.screenModeTabs?.addEventListener('click',event=>{const button=event.target.closest('[data-screen-mode]');if(button&&!screenTransferBusy)setScreenMode(button.dataset.screenMode);});
+    els.screenPickFilesBtn?.addEventListener('click',()=>els.screenFileInput?.click());
+    els.screenPickFolderBtn?.addEventListener('click',()=>els.screenFolderInput?.click());
+    els.screenFileInput?.addEventListener('change',()=>safe(()=>selectScreenFiles(els.screenFileInput.files)));
+    els.screenFolderInput?.addEventListener('change',()=>safe(()=>selectScreenFiles(els.screenFolderInput.files)));
+    els.screenDestination?.addEventListener('change',()=>safe(async()=>{
+      if (screenMode === 'album' && screenFiles.length) await selectScreenFiles(screenFiles.slice(0, screenFrameLimit()));
+      else if (screenMode === 'album') els.screenFileMeta.textContent = `相册按文件名排序，当前保存位置最多 ${screenFrameLimit()} 张。`;
+    }));
+    els.screenFit?.addEventListener('change',()=>{if(screenFiles.length&&screenMode!=='video')safe(()=>selectScreenFiles(screenFiles));});
+    els.screenSaveBtn?.addEventListener('click',()=>safe(saveScreenMedia));
+    els.screenCancelBtn?.addEventListener('click',()=>{screenTransferCancel=true;els.screenStatus.textContent='正在取消…';});
+    ['dragenter','dragover'].forEach(type=>els.screenDropzone?.addEventListener(type,event=>{event.preventDefault();els.screenDropzone.classList.add('dragover');}));
+    ['dragleave','drop'].forEach(type=>els.screenDropzone?.addEventListener(type,event=>{event.preventDefault();els.screenDropzone.classList.remove('dragover');if(type==='drop'&&!screenTransferBusy)safe(()=>selectScreenFiles(event.dataTransfer.files));}));
     els.readPhysicalBtn.addEventListener('click',()=>safe(readPhysicalLayer));els.readKeyboardLightsBtn?.addEventListener('click',()=>safe(()=>readLightGroup('keyboard')));els.readDotLightBtn?.addEventListener('click',()=>safe(()=>readLightGroup('dot')));els.addBlankFrameBtn.addEventListener('click',()=>addFrame(false));els.duplicateFrameBtn.addEventListener('click',()=>addFrame(true));els.deleteFrameBtn.addEventListener('click',deleteFrame);els.clearFrameBtn.addEventListener('click',()=>{frames[currentFrame]=blankFrame();renderPixelGrid();renderFrameList();});els.uploadMatrixBtn.addEventListener('click',()=>safe(uploadMatrix));els.playPreviewBtn.addEventListener('click',startPreview);
     els.scanMatrixBtn.addEventListener('click',()=>safe(scanMatrix));els.writeKeyBtn.addEventListener('click',()=>safe(writeSelectedKey));els.undoKeyBtn?.addEventListener('click',()=>safe(undoRemap));els.redoKeyBtn?.addEventListener('click',()=>safe(redoRemap));els.resetKeymapBtn?.addEventListener('click',()=>safe(resetLayer0FactoryKeys));els.cancelRemapBtn.addEventListener('click',clearPendingKeycode);els.useHexBtn.addEventListener('click',()=>safe(async()=>useHexAsPending()));els.keySearchInput.addEventListener('input',renderKeyPicker);els.clearLogBtn.addEventListener('click',()=>els.debugLog.textContent='');els.fpsSelect.addEventListener('change',()=>{if(previewTimer){stopPreview();startPreview();}});
     els.pixelGrid.addEventListener('contextmenu',e=>e.preventDefault());
@@ -2385,7 +2686,7 @@
     els.exportProfileBtn.addEventListener('click',()=>safe(exportProfile));els.profileFileInput.addEventListener('change',()=>{const f=els.profileFileInput.files?.[0];if(f)safe(()=>loadProfileFile(f));});els.applyProfileBtn.addEventListener('click',()=>safe(applyProfile));
     els.readDeviceSettingsBtn.addEventListener('click',()=>safe(readDeviceSettings));els.saveMagicBtn.addEventListener('click',()=>safe(saveMagic));els.saveFeaturesBtn.addEventListener('click',()=>safe(saveFeatures));els.syncTimeBtn.addEventListener('click',()=>safe(syncKeyboardTime));els.connectMode.addEventListener('change',updateConnectActionAvailability);els.saveConnectModeBtn.addEventListener('click',()=>safe(saveConnectMode));els.clearCurrentBindBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(3,'删除当前绑定')));els.clearAllBindsBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(4,'删除全部蓝牙绑定')));els.receiverDfuBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(5,'进入 2.4G Receiver DFU')));els.eepromResetBtn.addEventListener('click',()=>safe(eepromReset));
     if(navigator.hid)navigator.hid.addEventListener('disconnect',e=>{if(hidDevice===e.device){hidDevice=null;rgbLiveRunning=false;rgbV2Takeover=false;els.rgbLiveBtn.textContent='▶ 实时播放到键盘';setDot(els.hidDot,false);els.hidInfo.textContent='已断开';els.connectHidBtn.textContent='连接 HID';updateHistoryButtons();toast('HID 已断开',true);}});
-    if(navigator.serial)navigator.serial.addEventListener('disconnect',()=>{serialPort=null;setDot(els.serialDot,false);els.serialInfo.textContent='已断开';els.connectSerialBtn.textContent='连接 CDC';els.cdcValue.textContent='待连接';});
+    if(navigator.serial)navigator.serial.addEventListener('disconnect',()=>{serialPort=null;setDot(els.serialDot,false);setDot(els.screenSerialDot,false);els.serialInfo.textContent='已断开';if(els.screenSerialInfo)els.screenSerialInfo.textContent='CDC 已断开';els.connectSerialBtn.textContent='连接 CDC';if(els.screenConnectSerialBtn)els.screenConnectSerialBtn.textContent='连接 CDC';els.cdcValue.textContent='待连接';});
   }
 
   window.addEventListener('pagehide',()=>{
@@ -2399,7 +2700,7 @@
 
   async function autoReconnect(){
     try{const h=await findAuthorizedRawHid();if(h){if(!h.opened)await h.open();attachHid(h);await probeDevice();await readPhysicalLayer();}}catch(err){log('WARN',`HID 自动连接失败：${err.message}`);}
-    try{const p=await findAuthorizedSerial();if(p)els.serialInfo.textContent='已授权 CDC，点击“连接 CDC”打开串口';}catch{}
+    try{const p=await findAuthorizedSerial();if(p){els.serialInfo.textContent='已授权 CDC，点击“连接 CDC”打开串口';if(els.screenSerialInfo)els.screenSerialInfo.textContent='已授权 CDC，点击“连接 CDC”打开串口';}}catch{}
   }
 
   function bindShellStatus(){
@@ -2419,5 +2720,5 @@
     sync();
   }
 
-  checkEnvironment();buildLightingUI();buildLayerTabs();buildPhysicalKeyboard();buildKeyCategories();renderKeyPicker();updateRemapButtons();renderPixelGrid();renderFrameList();ensureRgbState();restoreRgbWorkspace();ensureRgbState();buildRgbPalette();buildRgbKeyboard();renderRgbFrameList();refreshRgbProjectSelect();resetRgbLiveStats();applyRgbPerKeyCapability(true);renderMacroList();loadMacroEditor();tickClock();setInterval(tickClock,1000);bindUI();bindShellStatus();updateConnectActionAvailability();initAppearance().catch(err=>console.warn('Appearance init failed',err));autoReconnect();
+  checkEnvironment();buildLightingUI();buildLayerTabs();buildPhysicalKeyboard();buildKeyCategories();renderKeyPicker();updateRemapButtons();renderPixelGrid();renderFrameList();setScreenMode('image');ensureRgbState();restoreRgbWorkspace();ensureRgbState();buildRgbPalette();buildRgbKeyboard();renderRgbFrameList();refreshRgbProjectSelect();resetRgbLiveStats();applyRgbPerKeyCapability(true);renderMacroList();loadMacroEditor();tickClock();setInterval(tickClock,1000);bindUI();bindShellStatus();updateConnectActionAvailability();initAppearance().catch(err=>console.warn('Appearance init failed',err));autoReconnect();
 })();

@@ -1,4 +1,4 @@
-# QK80 MK2 协议笔记（v1.2.6）
+# QK80 MK2 协议笔记（v1.3.0）
 
 ## RAM_FRAME_V2 主键盘 91 灯通道
 
@@ -141,13 +141,45 @@ Official definition mappings:
 - row-major
 - 1 frame = `7*7*3 = 147 bytes`
 
-## Screen / file transport found in official source
+## 320×172 彩色屏幕文件与传输
 
-- `E0/E1/E2`: file init / data / cancel over CDC
-- `EF/F0/F1`: firmware query / info / data
-- HID fallback uses command `0xD1`
+屏幕素材使用 16-bit little-endian RGB565，逐行排列。每帧为 `320 × 172 × 2 = 110080 bytes`。
 
-v0.4 deliberately does not expose firmware flashing UI.
+通用 20-byte 文件头：
+
+```text
+00  magic[4]
+04  base_header_size:u16_le = 20
+06  data_offset:u16_le
+08  total_file_size:u32_le
+0C  width:u16_le = 320
+0E  height:u16_le = 172
+10  orientation:u16_le = 0
+12  frame_count:u16_le
+14  type-specific metadata...
+```
+
+文件类型：
+
+- `ABKG`：自定义图片；`ABKT`：主题图片。`data_offset=20`，1 帧。
+- `ANIM`：自定义动画；`ANIT`：主题动画。头后依次保存每帧时长 `u16_le`（毫秒），再保存所有 RGB565 帧。
+- `ANPS`：自定义相册；`ANPT`：主题相册。头后为 `interval_seconds:u16_le`、`transition:u16_le`，再保存所有 RGB565 图片。
+- 相册 transition：`1=无`、`2=上→下`、`3=下→上`、`4=左→右`、`5=右→左`。
+- QK80 MK2 官方配置限定自定义动画/相册最多 500 帧、主题动画/相册最多 300 帧，屏幕方向值为 0。
+
+CDC 上传：
+
+```text
+E0 <file_header_first_20_bytes>
+E1 <offset:u32_be> <length:u8> <data:up_to_56_bytes>
+E2
+```
+
+- `E0` 返回 64-byte 回包，并回显 20-byte 文件头；`response[21] == 0xEE` 表示拒绝，`response[22]` 为状态或逐块 ACK 开关。
+- `E1` 每包最多 56-byte 数据；offset 为大端。若 E0 要求逐块 ACK，每个 E1 都等待回显，否则连续发送。
+- `E2` 取消当前传输。
+- `EF/F0/F1` 是固件查询/升级链，网页屏幕上传功能不会调用。
+- Raw HID fallback 为 `D1 20/21/22`，当前版本优先使用已确认的 CDC 路径。
 
 
 ## Per-Key RGB (v0.5)
