@@ -73,7 +73,7 @@
     'keySearchInput','keyPickerHint','keyPickerContent','cancelRemapBtn','useHexBtn','selectedMatrixMeta','keyLayer','matrixRows','matrixCols',
     'scanMatrixBtn','keyMatrix','keycodeInput','writeKeyBtn','undoKeyBtn','redoKeyBtn','resetKeymapBtn','debugLog','clearLogBtn','toast',
     'readMacrosBtn','importMacrosBtn','exportMacrosBtn','macroFileInput','saveMacrosBtn','macroCountLabel','macroBufferLabel','macroList','macroTitle','macroRecordDelay','macroAddDelayBtn','macroAddActionBtn','macroRecordBtn','macroClearBtn','macroTimeline','macroExpression','macroStatus','macroRecorderOverlay','macroRecorderIndex','macroRecorderCount','macroRecorderLast','macroRecorderPreview','macroStopOverlayBtn','macroActionOverlay','macroActionTitle','macroActionTabs','macroActionKeyAction','macroActionKeyName','macroKeyDatalist','macroActionDelay','macroActionText','macroActionPosition','macroActionCloseBtn','macroActionCancelBtn','macroActionSaveBtn',
-    'rgbReadBtn','rgbSaveStaticBtn','rgbExitTakeoverBtn','rgbClearFrameBtn','rgbPaintColor','rgbPalette','rgbFillBtn','rgbNeutralBtn','rgbPreviewFps','rgbPreviewBtn','rgbLiveFps','rgbLiveBtn','rgbFrameTitle','rgbPainterStatus','rgbWriteProgress','rgbKeyboard','rgbFrameCounter','rgbAddFrameBtn','rgbDuplicateFrameBtn','rgbDeleteFrameBtn','rgbFrameList','rgbSelectedKeyLabel','rgbLedIndexInput','rgbSetLedIndexBtn','rgbTestLedIndexBtn','rgbResetLedMapBtn','rgbMapMeta','rgbActualFps','rgbLiveFrameStat','rgbLiveKeysStat','rgbLiveLatencyStat','rgbDroppedStat','rgbProjectName','rgbProjectSelect','rgbSaveProjectBtn','rgbLoadProjectBtn','rgbDeleteProjectBtn','rgbExportProjectBtn','rgbImportProjectBtn','rgbProjectFileInput','rgbProjectStatus',
+    'rgbReadBtn','rgbSaveStaticBtn','rgbExitTakeoverBtn','rgbClearFrameBtn','rgbPaintColor','rgbPalette','rgbFillBtn','rgbNeutralBtn','rgbPreviewFps','rgbPreviewBtn','rgbLiveFps','rgbLiveBtn','rgbFrameTitle','rgbPainterStatus','rgbWriteProgress','rgbKeyboard','rgbFrameCounter','rgbAddFrameBtn','rgbDuplicateFrameBtn','rgbDeleteFrameBtn','rgbFrameList','rgbSelectedKeyLabel','rgbLedIndexInput','rgbSetLedIndexBtn','rgbTestLedIndexBtn','rgbResetLedMapBtn','rgbMapMeta','rgbActualFps','rgbLiveFrameStat','rgbLiveKeysStat','rgbLiveLatencyStat','rgbDroppedStat','rgbEffectType','rgbEffectColorA','rgbEffectColorB','rgbEffectFrames','rgbEffectPeriod','rgbBreathMin','rgbEffectDirection','rgbGenerateEffectBtn','rgbSmoothEffectBtn','rgbEffectSelectBtn','rgbEffectSelectAllBtn','rgbEffectClearSelectionBtn','rgbEffectSelectionStatus','rgbEffectStatus','rgbProjectName','rgbProjectSelect','rgbSaveProjectBtn','rgbLoadProjectBtn','rgbDeleteProjectBtn','rgbExportProjectBtn','rgbImportProjectBtn','rgbProjectFileInput','rgbProjectStatus',
     'rgbDiagRunBtn','rgbDiagExportBtn','rgbDiagD1Btn','rgbDiagStatus','rgbDiagSummary','rgbDiagDetails',
     'profileName','exportProfileBtn','profileExportStatus','profileFileInput','profileSummary','profileApplyConnection','profileApplyMatrix','applyProfileBtn',
     'readDeviceSettingsBtn','magicNkro','magicGui','magicAltGui','magicCapsCtrl','saveMagicBtn','featureLedPower','featureSleep','featureDebounceMode','featureDebounceDelay','saveFeaturesBtn','browserClock','syncTimeBtn','connectMode','saveConnectModeBtn','clearCurrentBindBtn','clearAllBindsBtn','receiverDfuBtn','resetConfirm','eepromResetBtn'
@@ -115,6 +115,9 @@
   let rgbPreviewTimer = null;
   let rgbPreviewIndex = 0;
   let rgbLiveRunning = false;
+  let rgbSmoothRunning = false;
+  let rgbEffectSelectionMode = false;
+  const rgbEffectSelection = new Set();
   let rgbSelectedVisualIndex = -1;
   let rgbLedMap = [];
   let rgbLastSentFrame = null;
@@ -412,6 +415,7 @@
   async function disconnectAll() {
     stopPreview();
     rgbLiveRunning = false;
+    rgbSmoothRunning = false;
     if (serialPort) {
       try { if (serialPort.readable || serialPort.writable) await serialPort.close(); } catch {}
       serialPort = null;
@@ -863,7 +867,7 @@
   const RGB_V2_CHUNK_BYTES = 21;
   const RGB_V2_CHUNK_COUNT = 13;
   const RGB_V2_PACKET_DELAY_MS = 50;
-  const RGB_V2_OP = { EXIT: 0x00, BEGIN: 0x01, DATA: 0x02, COMMIT: 0x03 };
+  const RGB_V2_OP = { EXIT: 0x00, BEGIN: 0x01, DATA: 0x02, COMMIT: 0x03, MASK_COLOR: 0x04 };
   const RGB_MAP_STORAGE_KEY = 'chisa-qk80mk2-perkey-led-map-v1';
   const RGB_PROJECTS_STORAGE_KEY = 'chisa-qk80mk2-rgb-projects-v1';
   const RGB_WORKSPACE_STORAGE_KEY = 'chisa-qk80mk2-rgb-workspace-v1';
@@ -927,7 +931,7 @@
     const cdc=d?.cdcSupport;
     const fw=d?.cdcFirmwareQuery;
     const lines=[];
-    lines.push('RAM_FRAME_V2：已集成（0x07 / 0x16 / 0x05，91 灯 RGB888，13 个 DATA 包）。');
+    lines.push('RAM_FRAME_V2/V3：整帧为 13 个 DATA 包；V3 MASK_COLOR 为单包 91-bit 选灯。');
     lines.push(`轴灯 0x16 可读取参数：${axis.length?axis.join(', '):'未发现 / 未完成'}`);
     lines.push(`CDC Support：${cdc?.ok?String(!!cdc.response?.[1]):'未确认'}${fw?.ok?' · Firmware Query 0xEF 有回包':fw?.skipped?' · CDC 未连接':' · Firmware Query 无有效回包'}`);
     lines.push('该诊断不会进入接管；用“发送当前帧到键盘”验证 v2 写入。所有 v2 颜色仅驻留 RAM。');
@@ -969,7 +973,7 @@
       d.protocol=await diagnosticHid(CMD.GET_PROTOCOL,[]);
       d.layers=await diagnosticHid(CMD.GET_LAYER_COUNT,[]);
       d.cdcSupport=await diagnosticHid(CMD.CDC_SUPPORT,[]);
-      d.ramFrameV2={version:2,hostPath:[0x07,0x16,0x05],plcCommand:0x5a,ledCount:91,dataChunks:13,chunkBytes:21,staticPacketDelayMs:RGB_V2_PACKET_DELAY_MS,livePacketDelayMs:10,liveFps:4,liveValidated:true};
+      d.ramFrameV2={version:2,hostPath:[0x07,0x16,0x05],plcCommand:0x5a,ledCount:91,dataChunks:13,chunkBytes:21,staticPacketDelayMs:RGB_V2_PACKET_DELAY_MS,livePacketDelayMs:10,liveFps:4,liveValidated:true,maskColorV3:{operation:4,maskBytes:12,targetFps:30,actualFps:30,liveValidated:true}};
       d.axisChannel=[];
       for(let id=1;id<=16;id++){
         const r=await diagnosticHid(CMD.CUSTOM_GET,[CHANNEL.AXIS,id],700);d.axisChannel.push({id,...r});
@@ -1279,6 +1283,38 @@
     });
   }
 
+  function updateRgbEffectSelectionUi() {
+    const physical = new Set();
+    rgbEffectSelection.forEach(index => VERIFIED_RGB_LED_GROUPS[index]?.forEach(led => physical.add(led)));
+    if (els.rgbEffectSelectionStatus) {
+      els.rgbEffectSelectionStatus.textContent = rgbEffectSelection.size
+        ? `已选择 ${rgbEffectSelection.size} 个键 · ${physical.size} 颗灯`
+        : '未选择时作用于全键盘';
+    }
+    if (els.rgbEffectSelectBtn) {
+      els.rgbEffectSelectBtn.textContent = rgbEffectSelectionMode ? '完成选择' : '开始选择效果按键';
+      els.rgbEffectSelectBtn.classList.toggle('recording', rgbEffectSelectionMode);
+    }
+    els.rgbKeyboard?.querySelectorAll('.rgb-keycap').forEach((key, index) => {
+      key.classList.toggle('effect-selected', rgbEffectSelection.has(index));
+      key.classList.toggle('effect-selecting', rgbEffectSelectionMode);
+    });
+  }
+
+  function toggleRgbEffectKey(index) {
+    if (!VERIFIED_RGB_LED_GROUPS[index]?.length) {
+      toast(`${qkLayout[index].label} 没有独立主键灯，无法加入效果`, true);
+      return;
+    }
+    if (rgbEffectSelection.has(index)) rgbEffectSelection.delete(index);
+    else rgbEffectSelection.add(index);
+    updateRgbEffectSelectionUi();
+  }
+
+  function rgbEffectTargetIndices() {
+    return rgbEffectSelection.size ? [...rgbEffectSelection] : qkLayout.map((_, index) => index).filter(index => VERIFIED_RGB_LED_GROUPS[index].length);
+  }
+
   function selectRgbKey(i) {
     rgbSelectedVisualIndex = i;
     const item = qkLayout[i];
@@ -1317,17 +1353,20 @@
       b.innerHTML = `<span>${item.label}</span><small>${ledGroup.length ? `LED ${ledGroup.join('/')}` : 'LED —'}</small>`;
       const paint = (e, color) => { e.preventDefault(); paintRgbKey(i,color); };
       b.addEventListener('pointerdown', e => {
-        if(e.button===0) paint(e, els.rgbPaintColor.value);
+        if(e.button===0 && rgbEffectSelectionMode){e.preventDefault();toggleRgbEffectKey(i);}
+        else if(e.button===0) paint(e, els.rgbPaintColor.value);
         else if(e.button===2) paint(e, RGB_OFF);
       });
       b.addEventListener('pointerover', e => {
+        if(rgbEffectSelectionMode)return;
         if(e.buttons&1) paint(e, els.rgbPaintColor.value);
         else if(e.buttons&2) paint(e, RGB_OFF);
       });
-      b.addEventListener('contextmenu', e => { e.preventDefault(); paintRgbKey(i,RGB_OFF); });
+      b.addEventListener('contextmenu', e => { e.preventDefault(); if(!rgbEffectSelectionMode)paintRgbKey(i,RGB_OFF); });
       els.rgbKeyboard.appendChild(b);
     });
     renderRgbFrame();
+    updateRgbEffectSelectionUi();
   }
 
   function renderRgbFrame() {
@@ -1338,6 +1377,8 @@
       const ledGroup=VERIFIED_RGB_LED_GROUPS[i];
       b.querySelector('small').textContent=ledGroup.length?`LED ${ledGroup.join('/')}`:'LED —';
       b.classList.toggle('selected',i===rgbSelectedVisualIndex);
+      b.classList.toggle('effect-selected',rgbEffectSelection.has(i));
+      b.classList.toggle('effect-selecting',rgbEffectSelectionMode);
     });
     els.rgbFrameTitle.textContent=`Frame ${rgbCurrentFrame+1}`;
     els.rgbFrameCounter.textContent=`${rgbCurrentFrame+1} / ${rgbFrames.length}`;
@@ -1391,16 +1432,203 @@
   function fillRgbFrame(color){ensureRgbState();rgbFrames[rgbCurrentFrame]=Array(qkLayout.length).fill(normalizeRgbFrameColor(color));renderRgbFrame();renderRgbFrameList();scheduleRgbWorkspaceSave();}
   function clearRgbFrame(){fillRgbFrame(RGB_OFF);els.rgbPainterStatus.textContent='当前帧已清空；黑色会通过 RAM_FRAME_V2 写成真正熄灭。';toast('当前 RGB 帧已清空');}
 
+  function rgbHexParts(hex) {
+    const value = /^#[0-9a-f]{6}$/i.test(String(hex)) ? String(hex) : RGB_OFF_COLOR;
+    return [parseInt(value.slice(1, 3), 16), parseInt(value.slice(3, 5), 16), parseInt(value.slice(5, 7), 16)];
+  }
+
+  function rgbPartsHex(parts) {
+    const value = `#${parts.map(channel => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, '0')).join('')}`;
+    return normalizeRgbFrameColor(value);
+  }
+
+  function rgbMixColor(colorA, colorB, amount) {
+    const a = rgbHexParts(colorA), b = rgbHexParts(colorB), t = Math.max(0, Math.min(1, amount));
+    return rgbPartsHex(a.map((channel, index) => channel + (b[index] - channel) * t));
+  }
+
+  function rgbScaleColor(color, brightness) {
+    return rgbPartsHex(rgbHexParts(color).map(channel => channel * Math.max(0, Math.min(1, brightness))));
+  }
+
+  function updateRgbEffectControls() {
+    const gradient = els.rgbEffectType?.value === 'gradient';
+    document.querySelectorAll('.rgb-gradient-option').forEach(control => control.classList.toggle('hidden', !gradient));
+    document.querySelectorAll('.rgb-breath-option').forEach(control => control.classList.toggle('hidden', gradient));
+    if (els.rgbGenerateEffectBtn) els.rgbGenerateEffectBtn.textContent = gradient ? '生成并替换为流动渐变' : '生成并替换为呼吸灯';
+    if (els.rgbEffectStatus) els.rgbEffectStatus.textContent = gradient ? '双色渐变会沿键盘方向循环流动' : '亮度平滑往返，首尾无跳变';
+  }
+
+  function generateRgbEffect() {
+    if (rgbLiveRunning || rgbSmoothRunning) throw new Error('请先停止正在播放的 RGB 效果，再生成新效果。');
+    ensureRgbState();
+    const hasEditedFrames = rgbFrames.length > 1 || rgbFrames.some(frame => frame.some(color => color !== RGB_OFF));
+    if (hasEditedFrames && !confirm(`这会用生成的效果替换当前 ${rgbFrames.length} 帧动画。未选中的键会保持当前帧颜色。确定继续吗？`)) return;
+    stopRgbPreview();
+    const type = els.rgbEffectType?.value === 'gradient' ? 'gradient' : 'breath';
+    const frameCount = Math.max(4, Math.min(48, Number(els.rgbEffectFrames?.value || 16)));
+    const colorA = els.rgbEffectColorA?.value || '#ff4fa3';
+    const targets = new Set(rgbEffectTargetIndices());
+    const baseFrame = [...rgbFrame()];
+    const generated = [];
+    if (type === 'breath') {
+      const minimum = Math.max(0, Math.min(1, Number(els.rgbBreathMin?.value || 0) / 100));
+      for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+        const smoothWave = .5 - .5 * Math.cos(2 * Math.PI * frameIndex / frameCount);
+        const brightness = minimum + (1 - minimum) * smoothWave;
+        const animated = rgbScaleColor(colorA, brightness);
+        generated.push(baseFrame.map((color, index) => targets.has(index) ? animated : color));
+      }
+    } else {
+      const colorB = els.rgbEffectColorB?.value || '#0a84ff';
+      const direction = els.rgbEffectDirection?.value || 'horizontal';
+      const maxX = Math.max(...qkLayout.map(key => key.x + (key.w || 1)));
+      const maxY = Math.max(...qkLayout.map(key => key.y + 1));
+      const centerX = maxX / 2, centerY = maxY / 2;
+      const maxRadius = Math.hypot(centerX, centerY) || 1;
+      const position = key => {
+        const x = key.x + (key.w || 1) / 2, y = key.y + .5;
+        if (direction === 'vertical') return y / maxY;
+        if (direction === 'diagonal') return (x + y) / (maxX + maxY);
+        if (direction === 'radial') return Math.hypot(x - centerX, y - centerY) / maxRadius;
+        return x / maxX;
+      };
+      for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+        const shift = frameIndex / frameCount;
+        generated.push(qkLayout.map((key, index) => {
+          if (!targets.has(index)) return baseFrame[index];
+          const blend = .5 - .5 * Math.cos(2 * Math.PI * (position(key) - shift));
+          return rgbMixColor(colorA, colorB, blend);
+        }));
+      }
+    }
+    rgbFrames = generated;
+    rgbCurrentFrame = 0;
+    renderRgbFrame();
+    renderRgbFrameList();
+    scheduleRgbWorkspaceSave();
+    const label = type === 'breath' ? '呼吸灯' : '流动渐变';
+    els.rgbEffectStatus.textContent = `${label}已生成 · ${targets.size} 个键 · ${frameCount} 帧`;
+    els.rgbPainterStatus.textContent = `${label}已载入编辑器；可网页预览、逐帧修改或实时播放到键盘。`;
+    if (els.rgbProjectStatus) els.rgbProjectStatus.textContent = `${frameCount} 帧 · 尚未保存为本地方案`;
+    toast(`${label}已生成：${frameCount} 帧`);
+  }
+
+  function rgbEffectPhysicalMask() {
+    const mask = new Uint8Array(12);
+    const physical = new Set();
+    for (const visualIndex of rgbEffectTargetIndices()) {
+      for (const led of VERIFIED_RGB_LED_GROUPS[visualIndex]) {
+        mask[led >> 3] |= 1 << (led & 7);
+        physical.add(led);
+      }
+    }
+    return { mask, count: physical.size };
+  }
+
+  async function sendRgbMaskColor(mask, color, sequence = 0) {
+    if (!hidDevice?.opened) throw new Error('请先连接 HID。');
+    const data = new Uint8Array(15);
+    data.set(mask.slice(0, 12));
+    data.set(rgbHexToBytes(color), 12);
+    rgbV2Takeover = true;
+    await sendRgbV2Payload(makeRgbV2Payload(RGB_V2_OP.MASK_COLOR, nextRgbV2Session(), sequence & 0xff, 15, data), { paced: false });
+  }
+
+  function applyRgbEffectPreviewColor(color) {
+    for (const index of rgbEffectTargetIndices()) {
+      const key = els.rgbKeyboard.querySelector(`[data-rgb-index="${index}"]`);
+      if (!key) continue;
+      key.style.setProperty('--rgb-key-color', rgbDisplayColor(color));
+      key.classList.toggle('rgb-off', color === RGB_OFF);
+    }
+  }
+
+  async function stopRgbSmoothEffect() {
+    rgbSmoothRunning = false;
+    if (els.rgbSmoothEffectBtn) {
+      els.rgbSmoothEffectBtn.textContent = '▶ 顺滑播放选中键';
+      els.rgbSmoothEffectBtn.classList.remove('recording');
+    }
+    els.rgbPainterStatus.textContent = '顺滑按键效果已停止；键盘保持最后显示的颜色。';
+    renderRgbFrame();
+  }
+
+  async function toggleRgbSmoothEffect() {
+    if (rgbSmoothRunning) { await stopRgbSmoothEffect(); return; }
+    if (rgbBusy) throw new Error(`主键盘 RGB 正在${rgbBusy}，请等待当前操作完成。`);
+    if (!hidDevice?.opened) throw new Error('请先连接 HID。');
+    if (rgbLiveRunning) await stopRgbLive();
+    const { mask, count } = rgbEffectPhysicalMask();
+    if (!count) throw new Error('所选按键没有可控制的物理灯。');
+    const type = els.rgbEffectType?.value === 'gradient' ? 'gradient' : 'breath';
+    const colorA = els.rgbEffectColorA?.value || '#ff4fa3';
+    const colorB = els.rgbEffectColorB?.value || '#0a84ff';
+    const minimum = Math.max(0, Math.min(1, Number(els.rgbBreathMin?.value || 0) / 100));
+    const cycleMs = Math.max(500, Number(els.rgbEffectPeriod?.value || 4000));
+    const targetFps = 30;
+    const frameMs = 1000 / targetFps;
+    rgbEffectSelectionMode = false;
+    updateRgbEffectSelectionUi();
+    rgbSmoothRunning = true;
+    resetRgbLiveStats();
+    els.rgbSmoothEffectBtn.textContent = '■ 停止顺滑效果';
+    els.rgbSmoothEffectBtn.classList.add('recording');
+    els.rgbPainterStatus.textContent = `MASK_COLOR 顺滑播放中：${count} 颗灯 · 目标 ${targetFps} FPS · ${cycleMs / 1000} 秒/循环 · 只写 RAM。`;
+    const startedAt = performance.now();
+    let nextFrameAt = startedAt;
+    let lastDoneAt = 0;
+    let frameNumber = 0;
+    try {
+      while (rgbSmoothRunning) {
+        const beforeWait = performance.now();
+        if (beforeWait < nextFrameAt) await rgbSleep(nextFrameAt - beforeWait);
+        if (!rgbSmoothRunning) break;
+        const frameStarted = performance.now();
+        const phase = ((frameStarted - startedAt) % cycleMs) / cycleMs;
+        const wave = .5 - .5 * Math.cos(2 * Math.PI * phase);
+        const color = type === 'gradient'
+          ? rgbMixColor(colorA, colorB, wave)
+          : rgbScaleColor(colorA, minimum + (1 - minimum) * wave);
+        await sendRgbMaskColor(mask, color, frameNumber);
+        const finished = performance.now();
+        const elapsed = finished - frameStarted;
+        const interval = lastDoneAt ? finished - lastDoneAt : 0;
+        const instantFps = interval > 0 ? 1000 / interval : 0;
+        rgbLiveStats.actualFps = rgbLiveStats.actualFps && instantFps ? rgbLiveStats.actualFps * .72 + instantFps * .28 : instantFps;
+        rgbLiveStats.frame = 0;
+        rgbLiveStats.keys = count;
+        rgbLiveStats.latency = elapsed;
+        if (elapsed > frameMs) rgbLiveStats.dropped++;
+        renderRgbLiveStats();
+        applyRgbEffectPreviewColor(color);
+        els.rgbWriteProgress.textContent = `顺滑效果 · ${count} 灯 · ${rgbLiveStats.actualFps ? rgbLiveStats.actualFps.toFixed(1) : '—'} FPS · ${Math.round(elapsed)} ms`;
+        lastDoneAt = finished;
+        frameNumber++;
+        nextFrameAt = Math.max(nextFrameAt + frameMs, finished);
+      }
+    } catch (err) {
+      rgbSmoothRunning = false;
+      els.rgbSmoothEffectBtn.textContent = '▶ 顺滑播放选中键';
+      els.rgbSmoothEffectBtn.classList.remove('recording');
+      try { if (hidDevice?.opened) await exitRgbV2Takeover(); } catch {}
+      els.rgbPainterStatus.textContent = '顺滑效果传输失败，已尝试恢复官方灯效；请确认已刷 RAM_FRAME_V3 PLC 固件。';
+      renderRgbFrame();
+      throw err;
+    }
+  }
+
   function setRgbBusy(label = '') {
     rgbBusy = label;
     const busy = !!label;
     [els.rgbSaveStaticBtn, els.rgbExitTakeoverBtn].forEach(btn => { if (btn) btn.disabled = busy; });
     if (els.rgbLiveBtn && !rgbLiveRunning) els.rgbLiveBtn.disabled = busy;
+    if (els.rgbSmoothEffectBtn && !rgbSmoothRunning) els.rgbSmoothEffectBtn.disabled = busy;
   }
 
   async function runRgbExclusive(label, fn) {
     if (rgbBusy) throw new Error(`主键盘 RGB 正在${rgbBusy}，请等待当前操作完成。`);
-    if (rgbLiveRunning) throw new Error('请先停止“实时播放到键盘”，再读取或写入静态帧。');
+    if (rgbLiveRunning || rgbSmoothRunning) throw new Error('请先停止正在播放的 RGB 效果，再读取或写入静态帧。');
     setRgbBusy(label);
     try { return await fn(); }
     finally { setRgbBusy(''); }
@@ -1454,6 +1682,7 @@
     if(rgbLiveRunning){await stopRgbLive();return;}
     if(rgbBusy)throw new Error(`主键盘 RGB 正在${rgbBusy}，请等待当前操作完成。`);
     if(!hidDevice?.opened)throw new Error('请先连接 HID。');
+    if(rgbSmoothRunning)await stopRgbSmoothEffect();
     ensureRgbState();
 
     const liveMode=normalizeRgbLiveMode(els.rgbLiveFps.value);
@@ -2648,7 +2877,7 @@
     els.rgbDiagD1Btn?.addEventListener('click',()=>safe(runRgbD1RamProbe));
     els.rgbReadBtn.addEventListener('click',()=>safe(()=>runRgbExclusive('读取逐键 RGB', readPerKeyRgbFromKeyboard)));
     els.rgbSaveStaticBtn.addEventListener('click',()=>safe(()=>runRgbExclusive('写入静态 RGB', saveRgbStaticFrame)));
-    els.rgbExitTakeoverBtn?.addEventListener('click',()=>safe(async()=>{if(rgbLiveRunning)await stopRgbLive();await runRgbExclusive('退出 RGB 接管',exitRgbV2Takeover);}));
+    els.rgbExitTakeoverBtn?.addEventListener('click',()=>safe(async()=>{if(rgbLiveRunning)await stopRgbLive();if(rgbSmoothRunning)await stopRgbSmoothEffect();await runRgbExclusive('退出 RGB 接管',exitRgbV2Takeover);}));
     els.rgbClearFrameBtn.addEventListener('click',clearRgbFrame);
     els.rgbFillBtn.addEventListener('click',()=>fillRgbFrame(els.rgbPaintColor.value));
     els.rgbNeutralBtn.addEventListener('click',()=>fillRgbFrame('#ffffff'));
@@ -2659,6 +2888,12 @@
     els.rgbAddFrameBtn.addEventListener('click',()=>addRgbFrame(false));
     els.rgbDuplicateFrameBtn.addEventListener('click',()=>addRgbFrame(true));
     els.rgbDeleteFrameBtn.addEventListener('click',deleteRgbFrame);
+    els.rgbEffectType?.addEventListener('change',updateRgbEffectControls);
+    els.rgbGenerateEffectBtn?.addEventListener('click',()=>safe(async()=>generateRgbEffect()));
+    els.rgbSmoothEffectBtn?.addEventListener('click',()=>safe(toggleRgbSmoothEffect));
+    els.rgbEffectSelectBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}rgbEffectSelectionMode=!rgbEffectSelectionMode;updateRgbEffectSelectionUi();});
+    els.rgbEffectSelectAllBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}qkLayout.forEach((_,index)=>{if(VERIFIED_RGB_LED_GROUPS[index].length)rgbEffectSelection.add(index);});updateRgbEffectSelectionUi();});
+    els.rgbEffectClearSelectionBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}rgbEffectSelection.clear();updateRgbEffectSelectionUi();});
     els.rgbSaveProjectBtn?.addEventListener('click',()=>safe(async()=>saveRgbProjectLocal()));
     els.rgbLoadProjectBtn?.addEventListener('click',()=>safe(async()=>loadRgbProjectLocal()));
     els.rgbDeleteProjectBtn?.addEventListener('click',()=>safe(async()=>deleteRgbProjectLocal()));
@@ -2685,7 +2920,7 @@
     els.macroClearBtn.addEventListener('click',()=>{syncMacroExpression('');els.macroStatus.textContent='宏已清空，尚未保存到键盘';});
     els.exportProfileBtn.addEventListener('click',()=>safe(exportProfile));els.profileFileInput.addEventListener('change',()=>{const f=els.profileFileInput.files?.[0];if(f)safe(()=>loadProfileFile(f));});els.applyProfileBtn.addEventListener('click',()=>safe(applyProfile));
     els.readDeviceSettingsBtn.addEventListener('click',()=>safe(readDeviceSettings));els.saveMagicBtn.addEventListener('click',()=>safe(saveMagic));els.saveFeaturesBtn.addEventListener('click',()=>safe(saveFeatures));els.syncTimeBtn.addEventListener('click',()=>safe(syncKeyboardTime));els.connectMode.addEventListener('change',updateConnectActionAvailability);els.saveConnectModeBtn.addEventListener('click',()=>safe(saveConnectMode));els.clearCurrentBindBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(3,'删除当前绑定')));els.clearAllBindsBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(4,'删除全部蓝牙绑定')));els.receiverDfuBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(5,'进入 2.4G Receiver DFU')));els.eepromResetBtn.addEventListener('click',()=>safe(eepromReset));
-    if(navigator.hid)navigator.hid.addEventListener('disconnect',e=>{if(hidDevice===e.device){hidDevice=null;rgbLiveRunning=false;rgbV2Takeover=false;els.rgbLiveBtn.textContent='▶ 实时播放到键盘';setDot(els.hidDot,false);els.hidInfo.textContent='已断开';els.connectHidBtn.textContent='连接 HID';updateHistoryButtons();toast('HID 已断开',true);}});
+    if(navigator.hid)navigator.hid.addEventListener('disconnect',e=>{if(hidDevice===e.device){hidDevice=null;rgbLiveRunning=false;rgbSmoothRunning=false;rgbV2Takeover=false;els.rgbLiveBtn.textContent='▶ 实时播放到键盘';if(els.rgbSmoothEffectBtn)els.rgbSmoothEffectBtn.textContent='▶ 顺滑播放选中键';setDot(els.hidDot,false);els.hidInfo.textContent='已断开';els.connectHidBtn.textContent='连接 HID';updateHistoryButtons();toast('HID 已断开',true);}});
     if(navigator.serial)navigator.serial.addEventListener('disconnect',()=>{serialPort=null;setDot(els.serialDot,false);setDot(els.screenSerialDot,false);els.serialInfo.textContent='已断开';if(els.screenSerialInfo)els.screenSerialInfo.textContent='CDC 已断开';els.connectSerialBtn.textContent='连接 CDC';if(els.screenConnectSerialBtn)els.screenConnectSerialBtn.textContent='连接 CDC';els.cdcValue.textContent='待连接';});
   }
 
@@ -2720,5 +2955,5 @@
     sync();
   }
 
-  checkEnvironment();buildLightingUI();buildLayerTabs();buildPhysicalKeyboard();buildKeyCategories();renderKeyPicker();updateRemapButtons();renderPixelGrid();renderFrameList();setScreenMode('image');ensureRgbState();restoreRgbWorkspace();ensureRgbState();buildRgbPalette();buildRgbKeyboard();renderRgbFrameList();refreshRgbProjectSelect();resetRgbLiveStats();applyRgbPerKeyCapability(true);renderMacroList();loadMacroEditor();tickClock();setInterval(tickClock,1000);bindUI();bindShellStatus();updateConnectActionAvailability();initAppearance().catch(err=>console.warn('Appearance init failed',err));autoReconnect();
+  checkEnvironment();buildLightingUI();buildLayerTabs();buildPhysicalKeyboard();buildKeyCategories();renderKeyPicker();updateRemapButtons();renderPixelGrid();renderFrameList();setScreenMode('image');ensureRgbState();restoreRgbWorkspace();ensureRgbState();buildRgbPalette();buildRgbKeyboard();renderRgbFrameList();refreshRgbProjectSelect();resetRgbLiveStats();updateRgbEffectControls();applyRgbPerKeyCapability(true);renderMacroList();loadMacroEditor();tickClock();setInterval(tickClock,1000);bindUI();bindShellStatus();updateConnectActionAvailability();initAppearance().catch(err=>console.warn('Appearance init failed',err));autoReconnect();
 })();

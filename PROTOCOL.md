@@ -1,4 +1,12 @@
-# QK80 MK2 协议笔记（v1.3.0）
+# QK80 MK2 协议笔记（v1.5.0）
+
+## RAM_FRAME_V3 按键掩码颜色通道
+
+V3 保持 V2 的 28-byte payload、CRC 和 `0x5A` 命令不变，只新增 `op=4 MASK_COLOR`。Master 无需修改。
+
+`MASK_COLOR` 的 data 区为：`mask[12], R, G, B, reserved[6]`，`count=15`。mask 按物理 LED index 0–90 编号；最后一个 mask byte 的高 5 位必须为零。PLC 校验成功后仅更新 mask 中置位的灯，再执行一次 flush。未选中的灯和软件帧缓冲内容均保持不变。
+
+该操作一条 Raw HID 报告即可完成一次动画采样，不使用新 RAM，也不写 EEPROM。实机已验证稳定达到 30 FPS：Esc 单灯呼吸和双色渐变均顺滑，其他灯保持不变；Backspace 的 45/46/47 三颗灯同步，键盘输入、停止播放和 EXIT 恢复均正常。EXIT、CRC 和版本校验继续沿用 V2。
 
 ## RAM_FRAME_V2 主键盘 91 灯通道
 
