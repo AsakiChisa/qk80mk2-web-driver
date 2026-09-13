@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#e9eef0" />
-  <title>QK80 MK2 Web Driver v1.0.2</title>
+  <title>QK80 MK2 Web Driver v1.2.6</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -76,7 +76,7 @@
 
         <div class="sidebar-foot">
           <div><span class="sidebar-foot-dot"></span> WebHID / CDC</div>
-          <small>v1.0.2 · RGB OFF PREVIEW</small>
+          <small>v1.2.6 · STABLE RELEASE</small>
         </div>
       </aside>
 
@@ -170,10 +170,11 @@
         <div class="section-title">
           <div>
             <h2>主键盘逐键 RGB 画板</h2>
-            <p>实验功能：使用 QK / VIA 的 Per-Key RGB 扩展（Hue + Saturation）。静态帧可写入键盘；多帧可在网页预览或由网页实时推送。</p>
+            <p>使用已验证的 RAM_FRAME_V2 整帧通道控制 91 颗 RGB 灯。支持真正黑色、宽键多灯、原子提交和低速硬件动画；所有颜色只写 RAM。</p>
           </div>
           <div class="inline-actions">
-            <button class="ghost" id="rgbReadBtn">读取键盘静态色</button>
+            <button class="ghost" id="rgbReadBtn" disabled title="RAM_FRAME_V2 不提供物理帧读取">物理帧不可读取</button>
+            <button class="ghost danger-text" id="rgbExitTakeoverBtn">退出接管 / 恢复官方灯效</button>
           </div>
         </div>
 
@@ -194,24 +195,46 @@
           </div>
           <div class="rgb-tool-play">
             <label>网页预览 FPS
-              <select id="rgbPreviewFps"><option>1</option><option>2</option><option value="5" selected>5</option><option>10</option><option>15</option><option>20</option></select>
+              <select id="rgbPreviewFps"><option>1</option><option>2</option><option>5</option><option value="10" selected>10</option><option>15</option><option>20</option><option>30</option><option>60</option></select>
             </label>
             <button class="ghost" id="rgbPreviewBtn">▶ 网页预览</button>
-            <label>实时 FPS
-              <select id="rgbLiveFps"><option value="1">1</option><option value="2" selected>2</option><option value="5">5</option><option value="10">10</option></select>
+            <label>硬件目标 FPS
+              <select id="rgbLiveFps"><option value="1">1 FPS（保守）</option><option value="stable" selected>4 FPS（稳定高速，推荐）</option></select>
             </label>
             <button class="primary" id="rgbLiveBtn">▶ 实时播放到键盘</button>
           </div>
         </div>
+
+        <details class="rgb-diagnostics card" open>
+          <summary><span>主键盘 RGB 通道状态</span><em id="rgbDiagStatus">RAM_FRAME_V2</em></summary>
+          <div class="rgb-diag-body">
+            <p>安全诊断只读取 VIA、Layer、CDC 与轴灯基础参数。整帧写入走 <code>07 16 05</code>，每帧 BEGIN + 13 DATA + COMMIT，不会 SAVE / EEPROM。</p>
+            <div class="rgb-diag-actions">
+              <button class="primary" id="rgbDiagRunBtn">运行安全诊断</button>
+              <button class="ghost" id="rgbDiagExportBtn" disabled>导出诊断 JSON</button>
+              <button class="ghost danger-text hidden" id="rgbDiagD1Btn" title="旧版点阵诊断保留项">旧版 D1 诊断</button>
+            </div>
+            <div class="rgb-diag-summary ok" id="rgbDiagSummary">RAM_FRAME_V2 已完成 91 灯、全黑、原子刷新、乱序拒绝与恢复实机验证。</div>
+            <pre class="rgb-diag-details" id="rgbDiagDetails">—</pre>
+            <p class="rgb-diag-foot">正式版默认使用实机验证稳定的 10 ms / 4 FPS。静态帧使用 50 ms 安全间隔；不稳定的 5 ms 与 0 ms 档已移除。</p>
+          </div>
+        </details>
 
         <div class="rgb-editor-layout">
           <article class="card rgb-painter-card">
             <div class="rgb-painter-head">
               <div>
                 <strong id="rgbFrameTitle">Frame 1</strong>
-                <span id="rgbPainterStatus">黑色＝熄灭预览 · 白色＝无饱和亮色 · 右键恢复熄灭预览</span>
+                <span id="rgbPainterStatus">黑色＝真正熄灭 · 拖动涂色 · 宽键自动同步多颗灯 · 浏览器自动保存当前工作区</span>
               </div>
               <div class="rgb-progress-inline"><span id="rgbWriteProgress">就绪</span></div>
+            </div>
+            <div class="rgb-live-stats" aria-label="硬件实时播放性能">
+              <div><span>实际 FPS</span><strong id="rgbActualFps">—</strong></div>
+              <div><span>当前帧</span><strong id="rgbLiveFrameStat">—</strong></div>
+              <div><span>本帧更新</span><strong><b id="rgbLiveKeysStat">0</b> Keys</strong></div>
+              <div><span>传输耗时</span><strong id="rgbLiveLatencyStat">—</strong></div>
+              <div><span>超周期帧</span><strong id="rgbDroppedStat">0</strong></div>
             </div>
             <div class="rgb-keyboard-scroll">
               <div class="rgb-keyboard-stage">
@@ -219,7 +242,7 @@
               </div>
             </div>
             <div class="rgb-note">
-              <strong>注意：</strong>黑色现在作为网页里的“熄灭预览”状态，与白色明确区分。官方 Per-Key RGB 接口每颗键仍只保存 <code>Hue + Saturation</code>，不能把该状态写成单键熄灭；含熄灭格的帧会在写入前提示。亮度仍由“轴灯 → 亮度”全局控制。
+              <strong>注意：</strong>颜色通过 RGB888 整帧写入 RAM，不会写 EEPROM；断电、拔插或点击“退出接管”后恢复官方灯效。关闭或刷新页面时网页也会尽力自动退出接管。
             </div>
           </article>
 
@@ -227,27 +250,42 @@
             <div class="frames-head">
               <div><h3>动画帧</h3><p id="rgbFrameCounter">1 / 1</p></div>
               <div class="mini-actions">
-                <button class="icon-btn" id="rgbAddFrameBtn" title="新增熄灭预览帧">＋</button>
+                <button class="icon-btn" id="rgbAddFrameBtn" title="新增全黑帧">＋</button>
                 <button class="icon-btn" id="rgbDuplicateFrameBtn" title="复制当前帧">⧉</button>
                 <button class="icon-btn danger" id="rgbDeleteFrameBtn" title="删除当前帧">−</button>
               </div>
             </div>
             <div class="frame-primary-actions rgb-frame-primary-actions">
               <button class="ghost" id="rgbClearFrameBtn">清空当前帧</button>
-              <button class="primary" id="rgbSaveStaticBtn">写入并保存当前帧</button>
+              <button class="primary" id="rgbSaveStaticBtn">发送当前帧到键盘（RAM）</button>
+            </div>
+            <div class="rgb-project-box">
+              <div class="rgb-project-title"><strong>动画方案</strong><span id="rgbProjectStatus">保存在当前浏览器本地</span></div>
+              <input id="rgbProjectName" type="text" value="My RGB Animation" maxlength="48" placeholder="方案名称" spellcheck="false">
+              <div class="rgb-project-actions">
+                <button class="ghost compact" id="rgbSaveProjectBtn">保存本地</button>
+                <select id="rgbProjectSelect" aria-label="本地 RGB 方案"><option value="">选择本地方案…</option></select>
+                <button class="ghost compact" id="rgbLoadProjectBtn">载入</button>
+                <button class="ghost compact danger-text" id="rgbDeleteProjectBtn">删除</button>
+              </div>
+              <div class="rgb-project-actions secondary">
+                <button class="ghost compact" id="rgbImportProjectBtn">导入 JSON</button>
+                <button class="ghost compact" id="rgbExportProjectBtn">导出 JSON</button>
+                <input id="rgbProjectFileInput" type="file" accept="application/json,.json" hidden>
+              </div>
             </div>
             <div class="rgb-frame-list" id="rgbFrameList"></div>
             <details class="rgb-calibration">
-              <summary>高级：LED 索引映射 / 校准</summary>
-              <p>QK80 MK2 官方 definition 没有公开 <code>li</code> 映射，因此 v0.5 默认按画面顺序使用 LED 0…N。若个别键颜色错位，可选中键后在这里改 LED Index。</p>
+              <summary>LED 物理映射（已验证）</summary>
+              <p>已固化 0–90 共 91 颗灯。Backspace、反斜杠、Enter、左 Shift、Space 和右 Alt 会自动控制对应的多颗灯。</p>
               <div class="rgb-cal-row"><span>当前键</span><strong id="rgbSelectedKeyLabel">未选择</strong></div>
-              <label>LED Index <input id="rgbLedIndexInput" type="number" min="0" max="255" value="0"></label>
-              <div class="inline-actions">
-                <button class="ghost compact" id="rgbSetLedIndexBtn">保存映射</button>
-                <button class="ghost compact" id="rgbTestLedIndexBtn">闪烁测试</button>
-                <button class="ghost compact danger-text" id="rgbResetLedMapBtn">恢复默认映射</button>
+              <label>LED Index <input id="rgbLedIndexInput" type="text" value="未选择" readonly></label>
+              <div class="inline-actions hidden">
+                <button class="ghost compact" id="rgbSetLedIndexBtn" disabled>固定映射</button>
+                <button class="ghost compact" id="rgbTestLedIndexBtn" disabled>无需测试</button>
+                <button class="ghost compact danger-text" id="rgbResetLedMapBtn">重新载入验证映射</button>
               </div>
-              <div class="rgb-map-meta" id="rgbMapMeta">默认映射：按本页物理键顺序 0…85</div>
+              <div class="rgb-map-meta" id="rgbMapMeta">固定映射：91/91 已实机验证（宽键自动控制多颗灯）</div>
             </details>
           </aside>
         </div>
@@ -557,7 +595,7 @@
     </main>
 
     <footer>
-      <span>QK80 MK2 Web Driver v1.0.2</span>
+      <span>QK80 MK2 Web Driver v1.2.6</span>
       <span>使用前请关闭 QK 官方网页；COM 串口同一时间只能由一个页面占用。</span>
     </footer>
       </div>

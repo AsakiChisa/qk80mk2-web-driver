@@ -1,4 +1,24 @@
-# QK80 MK2 协议笔记（v0.4）
+# QK80 MK2 协议笔记（v1.2.6）
+
+## RAM_FRAME_V2 主键盘 91 灯通道
+
+Host 报告固定 32 bytes：`07 16 05` 后跟 28-byte v2 payload。payload 为：
+
+`version, op, session, sequence, count, rgb[21], crc8, reserved`
+
+- `version = 2`
+- `op`：`0=EXIT`、`1=BEGIN`、`2=DATA`、`3=COMMIT`
+- `session`：1–14 循环使用
+- DATA 的 `sequence`：0–12，`count=21`，每包 7 颗灯
+- CRC：CRC-8/ATM，poly `0x07`、init `0x00`，覆盖 payload 0–25
+- 一帧：BEGIN → 13 DATA → COMMIT；仅 COMMIT 刷新物理灯
+- 静态帧采用 50 ms 包间隔；最快实验播放采用 5 ms 额外间隔，实测约 5–6 FPS。0 ms 已证实会使链路从首帧停滞，因此不再提供。所有档位均不发送 RGB `CUSTOM_SAVE`，不写 EEPROM
+
+PLC 会拒绝错误版本、CRC、session、sequence、长度和未收齐便 COMMIT。EXIT 是 fail-open 恢复路径。该行为已完成实机整帧、原子提交和乱序恢复验证。
+
+实时播放器按完整帧顺序运行，不追赶旧时间线、不主动跳过动画帧。正式版默认使用已完成冷启动实测的 10 ms 额外包间隔并以 4 FPS 调度；超周期帧实测为 0。5 ms 冷启动不稳定、0 ms 会停滞，因此均不再提供。
+
+后续章节保留旧版协议研究记录；主键盘 RGB 的当前实现以上述 RAM_FRAME_V2 为准。
 
 ## USB
 
@@ -141,3 +161,50 @@ SAVE: 09 00
 ```
 
 QK80 MK2 v3 definition 没有公开 `layouts.keys[].li`，因此网页默认以当前物理键画面顺序生成 LED index，并允许用户校准。
+
+
+## v1.1.0 主键盘逐键 RGB 动画运行方式
+
+当前实现继续使用 VIA Custom Menu 的逐键接口：
+
+- 读取单键：`08 00 01 <LED> 01`
+- 设置单键：`07 00 01 <LED> 01 <Hue> <Saturation>`
+- 静态持久化：`09 00`
+
+实时播放不会发送 `09 00`，只在 RAM/当前运行状态中逐键更新。播放引擎按相邻帧做 diff，只发送颜色变化的键；如果单帧传输超过目标帧周期，会跳过已经过时的动画帧，避免积压越来越严重。页面显示的是目标 FPS 和实测 FPS，两者可能不同。
+
+当前固件接口只提供每键 `Hue + Saturation`，没有独立 Value/Brightness，所以网页中的黑色仅表示“熄灭预览”，不能通过这套接口写成单键关灯。
+
+若固件返回首字节 `0xFF`，表示 VIA `id_unhandled` / 当前命令不受支持；v1.1.0 会立即报错，不再等待 HID 超时。
+
+
+## v1.1.1 RGB protocol probe findings
+
+### Standard VIA Per-Key RGB painter
+Official client generic API uses:
+
+- GET: `08 00 01 <ledIndex> 01`
+- SET: `07 00 01 <ledIndex> 01 <Hue> <Saturation>`
+- Commit custom menu channel 0: `09 00`
+
+On the tested QK80 MK2 firmware the SET path returned `FF 00 01 ...`, i.e. VIA `id_unhandled`. This indicates the generic `00 01` Per-Key channel is not exposed by this firmware/definition path even though the hardware can run per-key multi-color RGB effects.
+
+### QK private Matrix Lighting bulk transport (from official client code)
+There are two equivalent bulk writers in the official client:
+
+**Raw HID / TAB_BLOCKS (`0xD1`)**
+
+- Init: `D1 30 <frames> <fps> <rows> <cols>`
+- Data: `D1 31 <offset:4 bytes> <len> <data...>`
+- Official HID implementation chunks data at 25 bytes.
+
+**CDC / Web Serial**
+
+- Init: `C0 <frames> <fps> <rows> <cols>`
+- Data: `C1 <offset:4 bytes> <len> <data...>`
+- 64-byte packets, 56-byte data chunks.
+
+The official matrix editor encodes every pixel as HSV888 and calls this API with its configured rows/cols. For QK80 MK2 our known 7×7 screen already uses the CDC path. **This does not yet prove the same bulk buffer controls the main-key RGB matrix.** v1.1.1 therefore probes the D1 path only as an explicit, confirmed RAM-only action and does not route the main-key painter through it automatically.
+
+### Diagnostic policy
+The automatic RGB diagnostic performs GET/read-only operations only. The D1 test is separate because it writes Matrix Lighting RAM. It does not issue CUSTOM_SAVE or EEPROM reset/save.
