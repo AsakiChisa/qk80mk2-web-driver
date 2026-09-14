@@ -190,7 +190,7 @@
 
     // Bottom row
     VK('LCtrl',5,0,0,5,1.25),VK('LWin',5,1,1.25,5,1.25),VK('LAlt',5,2,2.5,5,1.25),VK('Space',5,6,3.75,5,6.25),
-    VK('RWin',5,10,10,5,1.25),VK('RAlt',5,11,11.25,5,1.25),VK('Fn',5,12,12.5,5,1.25),VK('O',5,13,13.75,5,1.25),
+    VK('RWin',5,10,10,5,1.25),VK('RAlt',5,11,11.25,5,1.25),VK('Fn',5,12,12.5,5,1.25),VK('RCtrl',5,13,13.75,5,1.25),
     VK('←',5,14,15.25,5),VK('↓',5,15,16.25,5),VK('→',4,15,17.25,5)
   ];
 
@@ -1326,7 +1326,7 @@
 
   function toggleRgbEffectKey(index) {
     if (!VERIFIED_RGB_LED_GROUPS[index]?.length) {
-      toast(`${qkLayout[index].label} 没有独立主键灯，无法加入效果`, true);
+      toast(`${rgbKeyDisplayLabel(qkLayout[index])} 没有独立主键灯，无法加入效果`, true);
       return;
     }
     if (rgbEffectSelection.has(index)) rgbEffectSelection.delete(index);
@@ -1353,7 +1353,7 @@
     const item = qkLayout[i];
     document.querySelectorAll('.rgb-keycap.selected').forEach(x=>x.classList.remove('selected'));
     els.rgbKeyboard.querySelector(`[data-rgb-index="${i}"]`)?.classList.add('selected');
-    els.rgbSelectedKeyLabel.textContent = `${item.label} · r${item.row} c${item.col}`;
+    els.rgbSelectedKeyLabel.textContent = `${rgbKeyDisplayLabel(item)} · Layer ${activeLayer} · r${item.row} c${item.col}`;
     const group = VERIFIED_RGB_LED_GROUPS[i];
     els.rgbLedIndexInput.value = group.length ? group.join(', ') : '无独立主键灯';
   }
@@ -1415,6 +1415,30 @@
     rgbPaintDragLastY = event.clientY;
   }
 
+  function rgbKeyDisplayLabel(item) {
+    if (!Array.isArray(currentLayerCodes)) return item.label;
+    const code = currentLayerCodes[item.row * MATRIX_COLS + item.col] ?? 0;
+    return keycodeName(code);
+  }
+
+  function updateRgbKeyboardKeyLabels() {
+    if (!els.rgbKeyboard) return;
+    els.rgbKeyboard.querySelectorAll('.rgb-keycap').forEach((key, index) => {
+      const item = qkLayout[index];
+      if (!item) return;
+      const mappedLabel = rgbKeyDisplayLabel(item);
+      const label = key.querySelector('span');
+      if (label) label.textContent = mappedLabel;
+      key.title = Array.isArray(currentLayerCodes)
+        ? `${mappedLabel}${mappedLabel !== item.label ? ` · 物理位 ${item.label}` : ''} · Layer ${activeLayer} · Matrix r${item.row} c${item.col}`
+        : `${item.label} · 尚未读取键盘映射 · Matrix r${item.row} c${item.col}`;
+    });
+    if (rgbSelectedVisualIndex >= 0) {
+      const item = qkLayout[rgbSelectedVisualIndex];
+      els.rgbSelectedKeyLabel.textContent = `${rgbKeyDisplayLabel(item)} · Layer ${activeLayer} · r${item.row} c${item.col}`;
+    }
+  }
+
   function buildRgbKeyboard() {
     ensureRgbState();
     els.rgbKeyboard.innerHTML = '';
@@ -1432,6 +1456,7 @@
       b.addEventListener('contextmenu', e => e.preventDefault());
       els.rgbKeyboard.appendChild(b);
     });
+    updateRgbKeyboardKeyLabels();
     renderRgbFrame();
     updateRgbEffectSelectionUi();
   }
@@ -2193,6 +2218,7 @@
 
   function refreshPhysicalKeyVisual(row,col,code){
     if(Array.isArray(currentLayerCodes))currentLayerCodes[row*MATRIX_COLS+col]=code;
+    updateRgbKeyboardKeyLabels();
     const cell=[...document.querySelectorAll('.keycap')].find(b=>Number(b.dataset.row)===row&&Number(b.dataset.col)===col);
     if(!cell)return;
     cell.dataset.code=code;
@@ -2329,6 +2355,7 @@
       b.title=`${mappedName}${physicalLabel&&physicalLabel!==mappedName?` · 物理位 ${physicalLabel}`:''} · Matrix r${row} c${col}`;
       b.classList.toggle('empty',code===0);b.classList.remove('selected');
     });
+    updateRgbKeyboardKeyLabels();
     resetSelectedEditor(`Layer ${activeLayer} 读取完成 · ${MATRIX_ROWS}×${MATRIX_COLS}`);els.physicalStatus.textContent=`Layer ${activeLayer} 已读取 · 点击键帽改键`;updateHistoryButtons();toast(`Layer ${activeLayer} 读取完成`);
   }
 

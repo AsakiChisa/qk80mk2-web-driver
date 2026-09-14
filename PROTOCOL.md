@@ -1,4 +1,4 @@
-# QK80 MK2 协议笔记（v1.7.2）
+# QK80 MK2 协议笔记（v1.7.3）
 
 ## PERSISTENT_EFFECT_V4 本地持久灯效
 
