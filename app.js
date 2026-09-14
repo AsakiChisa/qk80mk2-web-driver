@@ -173,7 +173,7 @@
     // Number row
     VK('`',1,0,0,1),VK('1',1,1,1,1),VK('2',1,2,2,1),VK('3',1,3,3,1),VK('4',1,4,4,1),VK('5',1,5,5,1),
     VK('6',1,6,6,1),VK('7',1,7,7,1),VK('8',1,8,8,1),VK('9',1,9,9,1),VK('0',1,10,10,1),VK('-',1,11,11,1),VK('=',1,12,12,1),
-    VK('Backspace',1,14,13,1,2),VK('Del',2,15,15.25,1),VK('End',2,14,16.25,1),VK('Vol-',1,15,17.25,1),
+    VK('Backspace',1,14,13,1,2),VK('Del',1,15,15.25,1),VK('End',2,14,16.25,1),VK('Vol-',2,15,17.25,1),
 
     // Q row
     VK('Tab',2,0,0,2,1.5),VK('Q',2,1,1.5,2),VK('W',2,2,2.5,2),VK('E',2,3,3.5,2),VK('R',2,4,4.5,2),VK('T',2,5,5.5,2),
@@ -203,13 +203,14 @@
       if (col >= 0 && col <= 12) return [16 + col];
       if (col === 13) return [61, 62];
       if (col === 14) return [45, 46, 47];
-      if (col === 15) return [31];
+      // The navigation cluster's matrix order differs from its physical LED order.
+      if (col === 15) return [29];
     }
     if (row === 2) {
       if (col === 0) return [32];
       if (col >= 1 && col <= 12) return [32 + col];
       if (col === 14) return [30];
-      if (col === 15) return [29];
+      if (col === 15) return [31];
     }
     if (row === 3) {
       if (col === 0) return [48];
@@ -1375,6 +1376,10 @@
   }
 
   function beginRgbPaintDrag(event, index) {
+    if (rgbSmoothRunning) {
+      toast('请先停止顺滑效果，修改静态背景后再重新播放。', true);
+      return;
+    }
     ensureRgbState();
     rgbPaintDragPointer = event.pointerId;
     rgbPaintDragColor = rgbFrames[rgbCurrentFrame][index] === RGB_OFF
@@ -1717,13 +1722,27 @@
     const cycleMs = Math.max(500, Number(els.rgbEffectPeriod?.value || 4000));
     const targetFps = 30;
     const frameMs = 1000 / targetFps;
+    const backgroundFrame = [...rgbFrame()];
     rgbEffectSelectionMode = false;
     updateRgbEffectSelectionUi();
+    stopRgbPreview();
+    setRgbBusy('同步顺滑效果静态背景');
+    els.rgbPainterStatus.textContent = '正在把当前画板的完整 91 灯颜色写入 RAM，作为顺滑效果的静态背景…';
+    els.rgbWriteProgress.textContent = '顺滑效果准备中 · 正在原子提交静态背景';
+    try {
+      await writeRgbFrameToKeyboard(backgroundFrame, { commit: true, progress: false, packetDelayMs: RGB_V2_PACKET_DELAY_MS });
+      rgbLastSentFrame = [...backgroundFrame];
+    } catch (err) {
+      try { if (hidDevice?.opened) await exitRgbV2Takeover(); } catch {}
+      throw err;
+    } finally {
+      setRgbBusy('');
+    }
     rgbSmoothRunning = true;
     resetRgbLiveStats();
     els.rgbSmoothEffectBtn.textContent = '■ 停止顺滑效果';
     els.rgbSmoothEffectBtn.classList.add('recording');
-    els.rgbPainterStatus.textContent = `MASK_COLOR 顺滑播放中：${count} 颗灯 · 目标 ${targetFps} FPS · ${cycleMs / 1000} 秒/循环 · 只写 RAM。`;
+    els.rgbPainterStatus.textContent = `MASK_COLOR 顺滑播放中：${count} 颗动画灯 · 目标 ${targetFps} FPS · 未选中灯保持当前画板静态颜色 · 只写 RAM。`;
     const startedAt = performance.now();
     let nextFrameAt = startedAt;
     let lastDoneAt = 0;
@@ -1993,12 +2012,12 @@
 
     BK('`',0x0035,0,1),BK('1',0x001e,1,1),BK('2',0x001f,2,1),BK('3',0x0020,3,1),BK('4',0x0021,4,1),BK('5',0x0022,5,1),
     BK('6',0x0023,6,1),BK('7',0x0024,7,1),BK('8',0x0025,8,1),BK('9',0x0026,9,1),BK('0',0x0027,10,1),BK('-',0x002d,11,1),BK('=',0x002e,12,1),BK('Backspace',0x002a,13,1,2),
-    BK('Ins',0x0049,15.5,1),BK('Home',0x004a,16.5,1),BK('PgUp',0x004b,17.5,1),
+    BK('Ins',0x0049,15.5,1),BK('Home',0x004a,16.5,1),BK('Vol+',0x00a9,17.5,1),
     BK('Num Lock',0x0053,19,1),BK('Num /',0x0054,20,1),BK('Num *',0x0055,21,1),BK('Num -',0x0056,22,1),
 
     BK('Tab',0x002b,0,2,1.5),BK('Q',0x0014,1.5,2),BK('W',0x001a,2.5,2),BK('E',0x0008,3.5,2),BK('R',0x0015,4.5,2),BK('T',0x0017,5.5,2),
     BK('Y',0x001c,6.5,2),BK('U',0x0018,7.5,2),BK('I',0x000c,8.5,2),BK('O',0x0012,9.5,2),BK('P',0x0013,10.5,2),BK('[',0x002f,11.5,2),BK(']',0x0030,12.5,2),BK('\\',0x0031,13.5,2,1.5),
-    BK('Del',0x004c,15.5,2),BK('End',0x004d,16.5,2),BK('PgDn',0x004e,17.5,2),
+    BK('Del',0x004c,15.5,2),BK('End',0x004d,16.5,2),BK('Vol-',0x00aa,17.5,2),
     BK('Num 7',0x005f,19,2),BK('Num 8',0x0060,20,2),BK('Num 9',0x0061,21,2),BK('Num +',0x0057,22,2,1,2),
 
     BK('Caps',0x0039,0,3,1.75),BK('A',0x0004,1.75,3),BK('S',0x0016,2.75,3),BK('D',0x0007,3.75,3),BK('F',0x0009,4.75,3),BK('G',0x000a,5.75,3),

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#e9eef0" />
-  <title>QK80 MK2 Web Driver v1.7.3</title>
+  <title>QK80 MK2 Web Driver v1.7.5</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -78,7 +78,7 @@
 
         <div class="sidebar-foot">
           <div><span class="sidebar-foot-dot"></span> WebHID / CDC</div>
-          <small>v1.7.3 · LIVE KEY LABELS</small>
+          <small>v1.7.5 · EFFECT BACKGROUND</small>
         </div>
       </aside>
 
@@ -301,7 +301,7 @@
                 <button class="ghost rgb-effect-generate danger-text" id="rgbClearPersistentEffectBtn">清除键盘本地灯效</button>
               </div>
               <small class="rgb-effect-note" id="rgbPersistentEffectStatus">键盘本地保存需要 PERSISTENT_EFFECT_V4 PLC 候选固件。仅保存当前呼吸/流动渐变的按键范围、颜色、方向、亮度和周期，不保存任意逐帧动画；只有点击保存或清除时才会擦写 Flash。</small>
-              <small class="rgb-effect-note">网页顺滑播放使用 V3/V4 的 MASK_COLOR；网页接管期间本地灯效暂停，退出接管后自动恢复。</small>
+              <small class="rgb-effect-note">顺滑播放前会先把当前画板完整写入 RAM：选中灯播放呼吸/渐变，未选中灯保持各自静态颜色。播放中如需改色，请先停止后重新播放。V4 断电保存目前只保存动画参数，不保存静态背景帧。</small>
             </div>
             <div class="rgb-project-box">
               <div class="rgb-project-title"><strong>动画方案</strong><span id="rgbProjectStatus">保存在当前浏览器本地</span></div>
@@ -767,7 +767,7 @@
     </main>
 
     <footer>
-      <span>QK80 MK2 Web Driver v1.7.3</span>
+      <span>QK80 MK2 Web Driver v1.7.5</span>
       <span>使用前请关闭 QK 官方网页；COM 串口同一时间只能由一个页面占用。</span>
     </footer>
       </div>
