@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#e9eef0" />
-  <title>QK80 MK2 Web Driver v1.6.0</title>
+  <title>QK80 MK2 Web Driver v1.7.2</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -78,7 +78,7 @@
 
         <div class="sidebar-foot">
           <div><span class="sidebar-foot-dot"></span> WebHID / CDC</div>
-          <small>v1.6.0 · SAFE UF2 FLASH</small>
+          <small>v1.7.2 · OFFICIAL LINK FIX</small>
         </div>
       </aside>
 
@@ -172,7 +172,7 @@
         <div class="section-title">
           <div>
             <h2>主键盘逐键 RGB 画板</h2>
-            <p>RAM_FRAME_V2 负责 91 灯原子整帧；RAM_FRAME_V3 新增按键掩码单包刷新，用于选中键的顺滑呼吸和双色渐变。所有颜色只写 RAM。</p>
+            <p>RAM_FRAME_V2 负责 91 灯原子整帧；V3 提供按键掩码顺滑播放；V4 可把一组按键的呼吸或流动渐变参数保存到键盘，关闭网页及断电后仍可运行。</p>
           </div>
           <div class="inline-actions">
             <button class="ghost" id="rgbReadBtn" disabled title="RAM_FRAME_V2 不提供物理帧读取">物理帧不可读取</button>
@@ -296,7 +296,12 @@
                 <button class="ghost rgb-effect-generate" id="rgbGenerateEffectBtn">生成并替换动画帧</button>
                 <button class="primary rgb-effect-generate" id="rgbSmoothEffectBtn">▶ 顺滑播放选中键</button>
               </div>
-              <small class="rgb-effect-note">顺滑播放需要 RAM_FRAME_V3 PLC 固件；每次只发送一条掩码颜色命令，未选中的灯保持不变。</small>
+              <div class="rgb-effect-actions rgb-persistent-actions">
+                <button class="primary rgb-effect-generate" id="rgbSavePersistentEffectBtn">保存到键盘（断电保留）</button>
+                <button class="ghost rgb-effect-generate danger-text" id="rgbClearPersistentEffectBtn">清除键盘本地灯效</button>
+              </div>
+              <small class="rgb-effect-note" id="rgbPersistentEffectStatus">键盘本地保存需要 PERSISTENT_EFFECT_V4 PLC 候选固件。仅保存当前呼吸/流动渐变的按键范围、颜色、方向、亮度和周期，不保存任意逐帧动画；只有点击保存或清除时才会擦写 Flash。</small>
+              <small class="rgb-effect-note">网页顺滑播放使用 V3/V4 的 MASK_COLOR；网页接管期间本地灯效暂停，退出接管后自动恢复。</small>
             </div>
             <div class="rgb-project-box">
               <div class="rgb-project-title"><strong>动画方案</strong><span id="rgbProjectStatus">保存在当前浏览器本地</span></div>
@@ -707,27 +712,25 @@
         <div class="section-title">
           <div>
             <h2>QK80 MK2 UF2 固件升级</h2>
-            <p>在浏览器中校验 UF2，然后写入键盘引导盘。本页不会在后台自动刷写，最后一步必须由你手动选择键盘引导盘。</p>
+            <p>选择并校验最新版自制 PLC 固件，然后转到 QK 官方驱动完成升级。本网页不再直接写入键盘。</p>
           </div>
         </div>
 
         <div class="firmware-warning card">
           <strong>⚠ 固件刷写有风险</strong>
-          <p>请使用键盘原装 USB 线、直连电脑 USB 口，刷写期间不要断电、拔线或关闭页面。自制固件若出现任何问题，请立即刷回 Qwertykeys 官方固件。</p>
+          <p>实测本网页原来的“另存为到引导盘”升级方式存在兼容问题，现已停用。请使用键盘原装 USB 线、直连电脑 USB 口，并在 QK 官方驱动中升级；自制固件若出现任何问题，请立即刷回官方固件。</p>
           <div class="firmware-official-links">
             <a class="ghost button-link" href="https://www.qwertykeys.com/pages/fw" target="_blank" rel="noopener noreferrer">QK 官方固件下载</a>
             <a class="ghost button-link" href="https://qwertykeys.notion.site/QK80-Mk2-Firmware-Upgrade-Guide-1233d090094280efb7a3d8b8c0dba801" target="_blank" rel="noopener noreferrer">QK80 MK2 官方升级教程</a>
-            <a class="ghost button-link" href="https://www.qkcfg.com/" target="_blank" rel="noopener noreferrer">QK HUB 官方驱动</a>
+            <a class="ghost button-link" href="https://cfg.qwertykeys.com/" target="_blank" rel="noopener noreferrer">QK 官方驱动</a>
           </div>
         </div>
 
         <div class="firmware-layout">
           <article class="card firmware-card">
-            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 1</span><h3>选择并校验固件</h3></div><span id="firmwareValidationBadge" class="firmware-badge">未选择</span></div>
+            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 1</span><h3>选择最新版固件</h3></div><span id="firmwareValidationBadge" class="firmware-badge">未选择</span></div>
             <div class="firmware-choice-grid">
-              <button class="primary" id="firmwareUseBundledBtn">使用内置 RAM_FRAME_V3 自制 PLC 固件</button>
-              <button class="ghost" id="firmwareChooseFileBtn">选择本地 .uf2</button>
-              <input id="firmwareFileInput" type="file" accept=".uf2,application/octet-stream" hidden>
+              <button class="primary" id="firmwareUseBundledBtn">选择最新版 PERSISTENT_EFFECT_V4</button>
             </div>
             <div class="firmware-file-summary" id="firmwareFileSummary">
               <div><span>文件</span><strong>—</strong></div>
@@ -737,31 +740,19 @@
               <div><span>大小</span><strong>—</strong></div>
               <div><span>SHA-256</span><strong>—</strong></div>
             </div>
-            <p class="setting-note">仅接受结构完整、块序号连续且 Family ID 为 QK80 MK2 Master <code>0x514B4D02</code> 或 PLC <code>0x514B4D50</code> 的 UF2。内置自制固件只适用于 PLC。</p>
+            <p class="setting-note"><strong>V4 已由用户通过 QK 官方驱动完成实机刷写，持久保存功能正常，只适用于 PLC。</strong> 点击后会在本地检查 UF2 结构、Family ID、地址范围和 SHA-256。</p>
           </article>
 
           <article class="card firmware-card">
-            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 2</span><h3>进入引导模式</h3></div><span class="firmware-badge neutral">手动操作</span></div>
+            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 2</span><h3>交给官方驱动刷入</h3></div><span id="firmwareWriteBadge" class="firmware-badge neutral">等待</span></div>
             <ol class="firmware-steps">
-              <li>先退出 RGB 接管，关闭其他 QK 驱动页面。</li>
-              <li>按你之前刷写时的方式，让对应的 Master 或 PLC 进入 UF2 引导模式。</li>
-              <li>Windows 出现新的可移动引导盘后，再执行第 3 步。</li>
+              <li>点击下方按钮并确认后，网页会下载已校验的 V4 UF2，同时打开 QK 官方驱动。</li>
+              <li>在官方驱动的固件升级页面选择刚下载的 UF2。</li>
+              <li>确认目标是 PLC 后开始升级，完成前不要断电或拔线。</li>
             </ol>
-            <div class="firmware-target-warning" id="firmwareTargetWarning">当前尚未选择固件。请勿把 PLC 固件写入 Master 引导盘，反之亦然。</div>
-          </article>
-
-          <article class="card firmware-card firmware-flash-card">
-            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 3</span><h3>写入键盘引导盘</h3></div><span id="firmwareWriteBadge" class="firmware-badge neutral">等待</span></div>
-            <label class="checkline firmware-confirm"><input id="firmwareRiskConfirm" type="checkbox">我已保留官方固件，已确认 Master / PLC 目标，并了解刷写期间断电可能导致设备无法启动。</label>
-            <label class="field firmware-phrase-label">输入 <strong id="firmwareConfirmPhraseHint">FLASH</strong> 确认
-              <input id="firmwareConfirmPhrase" type="text" placeholder="先选择有效 UF2" autocomplete="off" spellcheck="false">
-            </label>
-            <button class="danger-button firmware-write-button" id="firmwareWriteBtn" disabled>选择键盘引导盘并写入 UF2</button>
-            <div class="firmware-progress hidden" id="firmwareProgressWrap">
-              <progress id="firmwareProgress" max="100" value="0"></progress>
-              <span id="firmwareProgressText">0%</span>
-            </div>
-            <div class="firmware-result" id="firmwareResult">待固件通过校验后才会启用写入按钮。若浏览器不支持直接写入，页面会下载 UF2，请手动复制到引导盘。</div>
+            <div class="firmware-target-warning" id="firmwareTargetWarning">请先选择最新版固件。本页不会直接写入键盘。</div>
+            <button class="danger-button firmware-write-button" id="firmwareWriteBtn" disabled>下载固件并打开 QK 官方驱动</button>
+            <div class="firmware-result" id="firmwareResult">等待选择最新版固件。实际刷写统一由 QK 官方驱动完成。</div>
           </article>
         </div>
       </section>
@@ -776,7 +767,7 @@
     </main>
 
     <footer>
-      <span>QK80 MK2 Web Driver v1.6.0</span>
+      <span>QK80 MK2 Web Driver v1.7.2</span>
       <span>使用前请关闭 QK 官方网页；COM 串口同一时间只能由一个页面占用。</span>
     </footer>
       </div>

@@ -1,4 +1,18 @@
-# RAM_FRAME_V3 PLC 候选固件
+# QK80 MK2 PLC 自制固件
+
+## PERSISTENT_EFFECT_V4（首次实机验收通过）
+
+`QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V4_UNFLASHED_CANDIDATE.uf2` 在已验证的 V3 上新增键盘本地呼吸/流动渐变、显式保存和清除。只需更新 PLC，Master 保持现有 V2。固件运行时约 31 FPS，仅保存/清除时擦写专用 Flash 页。
+
+SHA-256：
+
+```text
+1E255F8EB54DED15BCF62A5E469DBAFE93AE9EE5ABE49E9349416B4174623C3E
+```
+
+该精确 SHA-256 文件已由用户通过 QK 官方驱动成功刷入，并确认“保存到键盘”功能正常。原网页“另存为到引导盘”升级方式存在兼容问题，现已停用；后续仍应通过 QK 官方驱动刷写。请保留官方 PLC 固件，若异常立即刷回。
+
+## RAM_FRAME_V3（已实机验证）
 
 `QK80MK2_PLC_v1.1.1_RAM_FRAME_V3_MASK_COLOR_UNFLASHED_CANDIDATE.uf2` 在已实机验证的 RAM_FRAME_V2 PLC 固件上新增 `MASK_COLOR` 操作。文件名保留构建时的 `UNFLASHED_CANDIDATE` 标记，但该精确 SHA-256 映像现已完成实机验证。
 

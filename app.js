@@ -47,7 +47,9 @@
     [0x514b4d02, { key: 'MASTER', label: 'QK80 MK2 Master', minAddress: 0x00020000, maxAddress: 0x00200000 }],
     [0x514b4d50, { key: 'PLC', label: 'QK80 MK2 PLC', minAddress: 0x08000000, maxAddress: 0x08200000 }],
   ]);
-  const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_RAM_FRAME_V3_MASK_COLOR_UNFLASHED_CANDIDATE.uf2';
+  const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V4_UNFLASHED_CANDIDATE.uf2';
+  const BUNDLED_PLC_UF2_SHA256 = '1E255F8EB54DED15BCF62A5E469DBAFE93AE9EE5ABE49E9349416B4174623C3E';
+  const OFFICIAL_QK_UPDATER_URL = 'https://cfg.qwertykeys.com/';
 
   // QK80 MK2 / QMK lighting mode tables, verified against the original QK UI.
   // 0x15 uses the classic RGBLIGHT mode numbering; 0x16 uses RGB Matrix mode numbering.
@@ -83,11 +85,11 @@
     'keySearchInput','keyPickerHint','keyPickerContent','cancelRemapBtn','useHexBtn','selectedMatrixMeta','keyLayer','matrixRows','matrixCols',
     'scanMatrixBtn','keyMatrix','keycodeInput','writeKeyBtn','undoKeyBtn','redoKeyBtn','resetKeymapBtn','debugLog','clearLogBtn','toast',
     'readMacrosBtn','importMacrosBtn','exportMacrosBtn','macroFileInput','saveMacrosBtn','macroCountLabel','macroBufferLabel','macroList','macroTitle','macroRecordDelay','macroAddDelayBtn','macroAddActionBtn','macroRecordBtn','macroClearBtn','macroTimeline','macroExpression','macroStatus','macroRecorderOverlay','macroRecorderIndex','macroRecorderCount','macroRecorderLast','macroRecorderPreview','macroStopOverlayBtn','macroActionOverlay','macroActionTitle','macroActionTabs','macroActionKeyAction','macroActionKeyName','macroKeyDatalist','macroActionDelay','macroActionText','macroActionPosition','macroActionCloseBtn','macroActionCancelBtn','macroActionSaveBtn',
-    'rgbReadBtn','rgbSaveStaticBtn','rgbExitTakeoverBtn','rgbClearFrameBtn','rgbPaintColor','rgbPalette','rgbFillBtn','rgbNeutralBtn','rgbPreviewFps','rgbPreviewBtn','rgbLiveFps','rgbLiveBtn','rgbFrameTitle','rgbPainterStatus','rgbWriteProgress','rgbKeyboard','rgbFrameCounter','rgbAddFrameBtn','rgbDuplicateFrameBtn','rgbDeleteFrameBtn','rgbFrameList','rgbSelectedKeyLabel','rgbLedIndexInput','rgbSetLedIndexBtn','rgbTestLedIndexBtn','rgbResetLedMapBtn','rgbMapMeta','rgbActualFps','rgbLiveFrameStat','rgbLiveKeysStat','rgbLiveLatencyStat','rgbDroppedStat','rgbEffectType','rgbEffectColorA','rgbEffectColorB','rgbEffectFrames','rgbEffectPeriod','rgbBreathMin','rgbEffectDirection','rgbGenerateEffectBtn','rgbSmoothEffectBtn','rgbEffectSelectBtn','rgbEffectSelectAllBtn','rgbEffectClearSelectionBtn','rgbEffectSelectionStatus','rgbEffectStatus','rgbProjectName','rgbProjectSelect','rgbSaveProjectBtn','rgbLoadProjectBtn','rgbDeleteProjectBtn','rgbExportProjectBtn','rgbImportProjectBtn','rgbProjectFileInput','rgbProjectStatus',
+    'rgbReadBtn','rgbSaveStaticBtn','rgbExitTakeoverBtn','rgbClearFrameBtn','rgbPaintColor','rgbPalette','rgbFillBtn','rgbNeutralBtn','rgbPreviewFps','rgbPreviewBtn','rgbLiveFps','rgbLiveBtn','rgbFrameTitle','rgbPainterStatus','rgbWriteProgress','rgbKeyboard','rgbFrameCounter','rgbAddFrameBtn','rgbDuplicateFrameBtn','rgbDeleteFrameBtn','rgbFrameList','rgbSelectedKeyLabel','rgbLedIndexInput','rgbSetLedIndexBtn','rgbTestLedIndexBtn','rgbResetLedMapBtn','rgbMapMeta','rgbActualFps','rgbLiveFrameStat','rgbLiveKeysStat','rgbLiveLatencyStat','rgbDroppedStat','rgbEffectType','rgbEffectColorA','rgbEffectColorB','rgbEffectFrames','rgbEffectPeriod','rgbBreathMin','rgbEffectDirection','rgbGenerateEffectBtn','rgbSmoothEffectBtn','rgbSavePersistentEffectBtn','rgbClearPersistentEffectBtn','rgbPersistentEffectStatus','rgbEffectSelectBtn','rgbEffectSelectAllBtn','rgbEffectClearSelectionBtn','rgbEffectSelectionStatus','rgbEffectStatus','rgbProjectName','rgbProjectSelect','rgbSaveProjectBtn','rgbLoadProjectBtn','rgbDeleteProjectBtn','rgbExportProjectBtn','rgbImportProjectBtn','rgbProjectFileInput','rgbProjectStatus',
     'rgbDiagRunBtn','rgbDiagExportBtn','rgbDiagD1Btn','rgbDiagStatus','rgbDiagSummary','rgbDiagDetails',
     'profileName','exportProfileBtn','profileExportStatus','profileFileInput','profileSummary','profileApplyConnection','profileApplyMatrix','applyProfileBtn',
     'readDeviceSettingsBtn','magicNkro','magicGui','magicAltGui','magicCapsCtrl','saveMagicBtn','featureLedPower','featureSleep','featureDebounceMode','featureDebounceDelay','saveFeaturesBtn','browserClock','syncTimeBtn','connectMode','saveConnectModeBtn','clearCurrentBindBtn','clearAllBindsBtn','receiverDfuBtn','resetConfirm','eepromResetBtn',
-    'firmwareUseBundledBtn','firmwareChooseFileBtn','firmwareFileInput','firmwareValidationBadge','firmwareFileSummary','firmwareTargetWarning','firmwareRiskConfirm','firmwareConfirmPhraseHint','firmwareConfirmPhrase','firmwareWriteBtn','firmwareWriteBadge','firmwareProgressWrap','firmwareProgress','firmwareProgressText','firmwareResult'
+    'firmwareUseBundledBtn','firmwareValidationBadge','firmwareFileSummary','firmwareTargetWarning','firmwareWriteBtn','firmwareWriteBadge','firmwareResult'
   ].map(id => [id, document.getElementById(id)]));
 
   let hidDevice = null;
@@ -138,7 +140,6 @@
   let rgbPaintDragLastY = null;
   const rgbPaintDragVisited = new Set();
   let selectedFirmware = null;
-  let firmwareWriteBusy = false;
   let rgbSelectedVisualIndex = -1;
   let rgbLedMap = [];
   let rgbLastSentFrame = null;
@@ -147,6 +148,7 @@
   let rgbLiveStats = { actualFps: 0, frame: 0, keys: 0, latency: 0, dropped: 0 };
   let rgbV2Session = 0;
   let rgbV2Takeover = false;
+  let rgbPersistentEffectSaved = false;
   let screenMode = 'image';
   let screenFiles = [];
   let screenPreviewUrls = [];
@@ -888,7 +890,7 @@
   const RGB_V2_CHUNK_BYTES = 21;
   const RGB_V2_CHUNK_COUNT = 13;
   const RGB_V2_PACKET_DELAY_MS = 50;
-  const RGB_V2_OP = { EXIT: 0x00, BEGIN: 0x01, DATA: 0x02, COMMIT: 0x03, MASK_COLOR: 0x04 };
+  const RGB_V2_OP = { EXIT: 0x00, BEGIN: 0x01, DATA: 0x02, COMMIT: 0x03, MASK_COLOR: 0x04, SAVE_EFFECT: 0x05, CLEAR_EFFECT: 0x06 };
   const RGB_MAP_STORAGE_KEY = 'chisa-qk80mk2-perkey-led-map-v1';
   const RGB_PROJECTS_STORAGE_KEY = 'chisa-qk80mk2-rgb-projects-v1';
   const RGB_WORKSPACE_STORAGE_KEY = 'chisa-qk80mk2-rgb-workspace-v1';
@@ -1591,6 +1593,63 @@
     return { mask, count: physical.size };
   }
 
+  function encodePersistentRgbEffect() {
+    const { mask, count } = rgbEffectPhysicalMask();
+    if (!count) throw new Error('所选按键没有可控制的物理灯。');
+    const data = new Uint8Array(20);
+    data.set(mask, 0);
+    data.set(rgbHexToBytes(els.rgbEffectColorA?.value || '#ff4fa3'), 12);
+    data.set(rgbHexToBytes(els.rgbEffectColorB?.value || '#0a84ff'), 15);
+    const type = els.rgbEffectType?.value === 'gradient' ? 1 : 0;
+    const directions = { horizontal: 0, vertical: 1, diagonal: 2, radial: 3 };
+    const direction = directions[els.rgbEffectDirection?.value] ?? 0;
+    const minimum = Math.max(0, Math.min(15, Math.round(Number(els.rgbBreathMin?.value || 0) * 15 / 100)));
+    const periods = [1500, 2500, 4000, 6000];
+    const requestedPeriod = Number(els.rgbEffectPeriod?.value || 4000);
+    const periodCode = Math.max(0, periods.indexOf(requestedPeriod));
+    data[18] = type | (direction << 1) | (minimum << 4);
+    data[19] = periodCode;
+    return { data, count, type: type ? '流动渐变' : '呼吸灯', periodMs: periods[periodCode] };
+  }
+
+  async function savePersistentRgbEffect() {
+    if (!hidDevice?.opened) throw new Error('请先连接 HID。');
+    if (rgbBusy) throw new Error(`主键盘 RGB 正在${rgbBusy}，请等待当前操作完成。`);
+    if (rgbLiveRunning) await stopRgbLive();
+    if (rgbSmoothRunning) await stopRgbSmoothEffect();
+    const encoded = encodePersistentRgbEffect();
+    if (!confirm(`将把当前“${encoded.type}”参数写入键盘 Flash，作用于 ${encoded.count} 颗灯。\n\n写入完成后关闭网页、拔线重插仍会自动运行。写入过程中请勿断电；只有点击本按钮时才会擦写一次。继续吗？`)) return;
+    setRgbBusy('保存本地灯效');
+    try {
+      els.rgbPersistentEffectStatus.textContent = '正在写入键盘 Flash，请勿断电…';
+      await sendRgbV2Payload(makeRgbV2Payload(RGB_V2_OP.SAVE_EFFECT, nextRgbV2Session(), 0, 20, encoded.data), { paced: false });
+      rgbPersistentEffectSaved = true;
+      rgbV2Takeover = false;
+      els.rgbPersistentEffectStatus.textContent = `已保存：${encoded.type} · ${encoded.count} 灯 · ${encoded.periodMs / 1000} 秒周期；关闭网页和断电后仍保留。`;
+      els.rgbPainterStatus.textContent = '键盘本地灯效已启用；网页实时播放会临时接管，退出后自动恢复本地灯效。';
+      toast('灯效已保存到键盘（断电保留）');
+    } finally { setRgbBusy(''); }
+  }
+
+  async function clearPersistentRgbEffect() {
+    if (!hidDevice?.opened) throw new Error('请先连接 HID。');
+    if (rgbBusy) throw new Error(`主键盘 RGB 正在${rgbBusy}，请等待当前操作完成。`);
+    if (rgbLiveRunning) await stopRgbLive();
+    if (rgbSmoothRunning) await stopRgbSmoothEffect();
+    if (!confirm('清除键盘中保存的自定义灯效，并恢复官方灯效？写入过程中请勿断电。')) return;
+    setRgbBusy('清除本地灯效');
+    try {
+      els.rgbPersistentEffectStatus.textContent = '正在清除键盘本地灯效，请勿断电…';
+      await sendRgbV2Payload(makeRgbV2Payload(RGB_V2_OP.CLEAR_EFFECT, nextRgbV2Session()), { paced: false });
+      rgbPersistentEffectSaved = false;
+      rgbV2Takeover = false;
+      rgbLastSentFrame = null;
+      els.rgbPersistentEffectStatus.textContent = '键盘本地自定义灯效已清除；官方灯效已恢复。';
+      els.rgbPainterStatus.textContent = '官方轴灯灯效已恢复。';
+      toast('键盘本地灯效已清除');
+    } finally { setRgbBusy(''); }
+  }
+
   async function sendRgbMaskColor(mask, color, sequence = 0) {
     if (!hidDevice?.opened) throw new Error('请先连接 HID。');
     const data = new Uint8Array(15);
@@ -1686,7 +1745,7 @@
   function setRgbBusy(label = '') {
     rgbBusy = label;
     const busy = !!label;
-    [els.rgbSaveStaticBtn, els.rgbExitTakeoverBtn].forEach(btn => { if (btn) btn.disabled = busy; });
+    [els.rgbSaveStaticBtn, els.rgbExitTakeoverBtn, els.rgbSavePersistentEffectBtn, els.rgbClearPersistentEffectBtn].forEach(btn => { if (btn) btn.disabled = busy; });
     if (els.rgbLiveBtn && !rgbLiveRunning) els.rgbLiveBtn.disabled = busy;
     if (els.rgbSmoothEffectBtn && !rgbSmoothRunning) els.rgbSmoothEffectBtn.disabled = busy;
   }
@@ -2792,51 +2851,42 @@
   function resetFirmwareSelection(message='尚未选择固件。'){
     selectedFirmware=null;const fields=firmwareSummaryFields();['—','—','—','—','—','—'].forEach((v,i)=>{if(fields[i])fields[i].textContent=v;});
     if(els.firmwareValidationBadge){els.firmwareValidationBadge.textContent='未选择';els.firmwareValidationBadge.className='firmware-badge';}
-    if(els.firmwareTargetWarning){els.firmwareTargetWarning.textContent=message+' 请勿把 PLC 固件写入 Master 引导盘，反之亦然。';els.firmwareTargetWarning.className='firmware-target-warning';}
-    if(els.firmwareRiskConfirm)els.firmwareRiskConfirm.checked=false;if(els.firmwareConfirmPhraseHint)els.firmwareConfirmPhraseHint.textContent='FLASH';if(els.firmwareConfirmPhrase){els.firmwareConfirmPhrase.value='';els.firmwareConfirmPhrase.placeholder='先选择有效 UF2';}
-    if(els.firmwareWriteBadge){els.firmwareWriteBadge.textContent='等待';els.firmwareWriteBadge.className='firmware-badge neutral';}if(els.firmwareProgressWrap)els.firmwareProgressWrap.classList.add('hidden');if(els.firmwareProgress)els.firmwareProgress.value=0;if(els.firmwareProgressText)els.firmwareProgressText.textContent='0%';
+    if(els.firmwareTargetWarning){els.firmwareTargetWarning.textContent=message+' 本页不会直接写入键盘；实际升级交给 QK 官方驱动。';els.firmwareTargetWarning.className='firmware-target-warning';}
+    if(els.firmwareWriteBadge){els.firmwareWriteBadge.textContent='等待';els.firmwareWriteBadge.className='firmware-badge neutral';}
     updateFirmwareWriteAvailability();
   }
   function updateFirmwareWriteAvailability(){
-    const phrase=selectedFirmware?`FLASH ${selectedFirmware.meta.family.key}`:'FLASH';
-    if(els.firmwareConfirmPhraseHint)els.firmwareConfirmPhraseHint.textContent=phrase;
-    if(els.firmwareWriteBtn)els.firmwareWriteBtn.disabled=firmwareWriteBusy||!selectedFirmware||!els.firmwareRiskConfirm?.checked||els.firmwareConfirmPhrase?.value.trim().toUpperCase()!==phrase;
+    if(els.firmwareWriteBtn)els.firmwareWriteBtn.disabled=!selectedFirmware;
   }
-  async function selectFirmwareBytes(name,buffer,source){
+  async function selectFirmwareBytes(name,buffer,source,expectedSha256=''){
     resetFirmwareSelection('正在校验固件…');
     try{
-      const meta=await parseQkUf2(name,buffer);selectedFirmware={name,buffer,meta,source};
+      const meta=await parseQkUf2(name,buffer);
+      if(expectedSha256&&meta.sha256!==expectedSha256)throw new Error('内置固件的 SHA-256 与已发布最新版不一致，已停止操作。');
+      selectedFirmware={name,buffer,meta,source};
       const fields=firmwareSummaryFields(),values=[name,`${meta.family.label} · ${uf2Hex(meta.familyId)}`,`${meta.blockCount} blocks`,`${uf2Hex(meta.minAddress)}–${uf2Hex(meta.maxAddress)}`,humanBytes(meta.size),meta.sha256];values.forEach((v,i)=>{if(fields[i])fields[i].textContent=v;});
       els.firmwareValidationBadge.textContent='校验通过';els.firmwareValidationBadge.className='firmware-badge ok';
-      els.firmwareTargetWarning.textContent=`目标必须是 ${meta.family.label} 引导盘。当前文件不能刷入另一颗控制器。`;els.firmwareTargetWarning.className='firmware-target-warning ready';
-      els.firmwareConfirmPhrase.value='';els.firmwareConfirmPhrase.placeholder=`输入 FLASH ${meta.family.key}`;setFirmwareResult(`已校验：${source}。写入前请再次核对目标为 ${meta.family.label}。`,'ok');
+      els.firmwareTargetWarning.textContent=`已确认这是 ${meta.family.label} 固件。下一步将下载该文件并打开 QK 官方驱动。`;els.firmwareTargetWarning.className='firmware-target-warning ready';
+      setFirmwareResult(`已校验：${source}。点击下一步后由 QK 官方驱动执行实际升级。`,'ok');
     }catch(err){resetFirmwareSelection('固件校验失败。');els.firmwareValidationBadge.textContent='已拒绝';els.firmwareValidationBadge.className='firmware-badge bad';setFirmwareResult(err.message,'bad');throw err;}finally{updateFirmwareWriteAvailability();}
   }
   async function useBundledFirmware(){
-    els.firmwareUseBundledBtn.disabled=true;setFirmwareResult('正在读取并校验内置 RAM_FRAME_V3 PLC 固件…');
-    try{const response=await fetch(BUNDLED_PLC_UF2,{cache:'no-store'});if(!response.ok)throw new Error(`内置固件读取失败：HTTP ${response.status}`);await selectFirmwareBytes(BUNDLED_PLC_UF2.split('/').pop(),await response.arrayBuffer(),'网页内置自制固件');}
+    els.firmwareUseBundledBtn.disabled=true;setFirmwareResult('正在读取并校验内置 PERSISTENT_EFFECT_V4 PLC 固件…');
+    try{const response=await fetch(BUNDLED_PLC_UF2,{cache:'no-store'});if(!response.ok)throw new Error(`内置固件读取失败：HTTP ${response.status}`);await selectFirmwareBytes(BUNDLED_PLC_UF2.split('/').pop(),await response.arrayBuffer(),'网页内置最新版 V4',BUNDLED_PLC_UF2_SHA256);}
     finally{els.firmwareUseBundledBtn.disabled=false;}
   }
-  async function chooseFirmwareFile(file){if(!file)return;if(!/\.uf2$/i.test(file.name))throw new Error('请选择 .uf2 固件文件。');if(file.size>4*1024*1024)throw new Error('UF2 文件超过 4 MB，已拒绝。');await selectFirmwareBytes(file.name,await file.arrayBuffer(),'本地文件');}
   function downloadSelectedFirmware(){
-    if(!selectedFirmware)return;const blob=new Blob([selectedFirmware.buffer],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=selectedFirmware.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setFirmwareResult('浏览器不支持直接写入引导盘，UF2 已下载。请把该文件手动复制到正确的键盘引导盘。','warn');
+    if(!selectedFirmware)return;const blob=new Blob([selectedFirmware.buffer],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=selectedFirmware.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
-  async function writeSelectedFirmware(){
-    if(!selectedFirmware)throw new Error('请先选择并校验 UF2。');if(firmwareWriteBusy)return;
-    const phrase=`FLASH ${selectedFirmware.meta.family.key}`;if(!els.firmwareRiskConfirm.checked||els.firmwareConfirmPhrase.value.trim().toUpperCase()!==phrase)throw new Error(`请勾选风险确认并输入 ${phrase}。`);
-    if(!window.showSaveFilePicker){downloadSelectedFirmware();return;}
-    if(!confirm(`下一步会打开“另存为”窗口。\n\n只可选择 ${selectedFirmware.meta.family.label} 的 UF2 引导盘根目录，不要选择电脑普通磁盘，也不要选择另一颗控制器。\n\n刷写期间不要断电。继续吗？`))return;
-    firmwareWriteBusy=true;updateFirmwareWriteAvailability();els.firmwareWriteBadge.textContent='写入中';els.firmwareWriteBadge.className='firmware-badge';els.firmwareProgressWrap.classList.remove('hidden');els.firmwareProgress.value=5;els.firmwareProgressText.textContent='等待选择引导盘…';setFirmwareResult(`请选择 ${selectedFirmware.meta.family.label} 引导盘，并保持文件名 ${selectedFirmware.name}。`,'warn');
-    let writable=null,written=false;
-    try{
-      const handle=await window.showSaveFilePicker({suggestedName:selectedFirmware.name,types:[{description:'UF2 firmware',accept:{'application/octet-stream':['.uf2']}}],excludeAcceptAllOption:true});
-      els.firmwareProgress.value=20;els.firmwareProgressText.textContent='正在写入 UF2…';writable=await handle.createWritable();await writable.write(new Uint8Array(selectedFirmware.buffer));written=true;els.firmwareProgress.value=90;els.firmwareProgressText.textContent='正在完成写入…';await writable.close();writable=null;els.firmwareProgress.value=100;els.firmwareProgressText.textContent='100% · 已完成';els.firmwareWriteBadge.textContent='已完成';els.firmwareWriteBadge.className='firmware-badge ok';setFirmwareResult('UF2 已写入。键盘可能会自动退出引导盘并重新连接；请等待设备稳定后再打开其他功能。若行为异常，请从页面上方入口下载并刷回官方固件。','ok');toast('固件文件写入完成');
-    }catch(err){
-      if(writable)try{await writable.abort();}catch{}
-      if(err?.name==='AbortError'){els.firmwareWriteBadge.textContent='已取消';els.firmwareWriteBadge.className='firmware-badge neutral';setFirmwareResult('已取消，没有开始写入。');}
-      else if(written){els.firmwareWriteBadge.textContent='需确认';els.firmwareWriteBadge.className='firmware-badge';setFirmwareResult('数据已发送，但引导盘在完成阶段断开。它可能正在自动重启；请先检查键盘能否正常连接。若不能，请重新进入引导模式并刷入官方固件。','warn');log('WARN',`UF2 完成阶段：${err.message}`);}
-      else{els.firmwareWriteBadge.textContent='失败';els.firmwareWriteBadge.className='firmware-badge bad';setFirmwareResult(`写入未完成：${err.message}。请重新进入引导模式，并优先刷入官方固件。`,'bad');throw err;}
-    }finally{firmwareWriteBusy=false;updateFirmwareWriteAvailability();}
+  function openOfficialFirmwareUpdater(){
+    if(!selectedFirmware)throw new Error('请先选择并校验最新版固件。');
+    if(!confirm(`即将下载已校验的 ${selectedFirmware.meta.family.label} V4 固件，并打开 QK 官方驱动。\n\n请在官方驱动的固件升级页面选择刚下载的 UF2；刷写期间不要断电。继续吗？`))return;
+    downloadSelectedFirmware();
+    const opened=window.open(OFFICIAL_QK_UPDATER_URL,'_blank');
+    if(opened)opened.opener=null;
+    els.firmwareWriteBadge.textContent='已转交官方驱动';els.firmwareWriteBadge.className='firmware-badge ok';
+    setFirmwareResult(opened?'固件已下载，QK 官方驱动已打开。请在官方驱动中选择刚下载的 UF2 并开始升级。':'固件已下载，但浏览器阻止了新窗口；请点击页面上方“QK HUB 官方驱动”。','warn');
+    toast('已下载固件，实际刷写请在 QK 官方驱动中完成');
   }
 
   async function exportProfile(){
@@ -3037,6 +3087,8 @@
     els.rgbEffectType?.addEventListener('change',updateRgbEffectControls);
     els.rgbGenerateEffectBtn?.addEventListener('click',()=>safe(async()=>generateRgbEffect()));
     els.rgbSmoothEffectBtn?.addEventListener('click',()=>safe(toggleRgbSmoothEffect));
+    els.rgbSavePersistentEffectBtn?.addEventListener('click',()=>safe(savePersistentRgbEffect));
+    els.rgbClearPersistentEffectBtn?.addEventListener('click',()=>safe(clearPersistentRgbEffect));
     els.rgbEffectSelectBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}finishRgbEffectSelectionDrag();rgbEffectSelectionMode=!rgbEffectSelectionMode;updateRgbEffectSelectionUi();});
     els.rgbEffectSelectAllBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}qkLayout.forEach((_,index)=>{if(VERIFIED_RGB_LED_GROUPS[index].length)rgbEffectSelection.add(index);});updateRgbEffectSelectionUi();});
     els.rgbEffectClearSelectionBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}rgbEffectSelection.clear();updateRgbEffectSelectionUi();});
@@ -3066,11 +3118,7 @@
     els.macroClearBtn.addEventListener('click',()=>{syncMacroExpression('');els.macroStatus.textContent='宏已清空，尚未保存到键盘';});
     els.exportProfileBtn.addEventListener('click',()=>safe(exportProfile));els.profileFileInput.addEventListener('change',()=>{const f=els.profileFileInput.files?.[0];if(f)safe(()=>loadProfileFile(f));});els.applyProfileBtn.addEventListener('click',()=>safe(applyProfile));
     els.firmwareUseBundledBtn?.addEventListener('click',()=>safe(useBundledFirmware));
-    els.firmwareChooseFileBtn?.addEventListener('click',()=>els.firmwareFileInput?.click());
-    els.firmwareFileInput?.addEventListener('change',()=>{const file=els.firmwareFileInput.files?.[0];els.firmwareFileInput.value='';if(file)safe(()=>chooseFirmwareFile(file));});
-    els.firmwareRiskConfirm?.addEventListener('change',updateFirmwareWriteAvailability);
-    els.firmwareConfirmPhrase?.addEventListener('input',updateFirmwareWriteAvailability);
-    els.firmwareWriteBtn?.addEventListener('click',()=>safe(writeSelectedFirmware));
+    els.firmwareWriteBtn?.addEventListener('click',()=>safe(async()=>openOfficialFirmwareUpdater()));
     els.readDeviceSettingsBtn.addEventListener('click',()=>safe(readDeviceSettings));els.saveMagicBtn.addEventListener('click',()=>safe(saveMagic));els.saveFeaturesBtn.addEventListener('click',()=>safe(saveFeatures));els.syncTimeBtn.addEventListener('click',()=>safe(syncKeyboardTime));els.connectMode.addEventListener('change',updateConnectActionAvailability);els.saveConnectModeBtn.addEventListener('click',()=>safe(saveConnectMode));els.clearCurrentBindBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(3,'删除当前绑定')));els.clearAllBindsBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(4,'删除全部蓝牙绑定')));els.receiverDfuBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(5,'进入 2.4G Receiver DFU')));els.eepromResetBtn.addEventListener('click',()=>safe(eepromReset));
     if(navigator.hid)navigator.hid.addEventListener('disconnect',e=>{if(hidDevice===e.device){hidDevice=null;rgbLiveRunning=false;rgbSmoothRunning=false;rgbV2Takeover=false;els.rgbLiveBtn.textContent='▶ 实时播放到键盘';if(els.rgbSmoothEffectBtn)els.rgbSmoothEffectBtn.textContent='▶ 顺滑播放选中键';setDot(els.hidDot,false);els.hidInfo.textContent='已断开';els.connectHidBtn.textContent='连接 HID';updateHistoryButtons();toast('HID 已断开',true);}});
     if(navigator.serial)navigator.serial.addEventListener('disconnect',()=>{serialPort=null;setDot(els.serialDot,false);setDot(els.screenSerialDot,false);els.serialInfo.textContent='已断开';if(els.screenSerialInfo)els.screenSerialInfo.textContent='CDC 已断开';els.connectSerialBtn.textContent='连接 CDC';if(els.screenConnectSerialBtn)els.screenConnectSerialBtn.textContent='连接 CDC';els.cdcValue.textContent='待连接';});
