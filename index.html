@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#e9eef0" />
-  <title>QK80 MK2 Web Driver v1.5.0</title>
+  <title>QK80 MK2 Web Driver v1.6.0</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -72,12 +72,13 @@
           <div class="nav-section-label">SYSTEM</div>
           <button class="tab" data-tab="device"><span class="nav-icon">⚙</span><span>设备设置</span></button>
           <button class="tab" data-tab="appearance"><span class="nav-icon">◐</span><span>界面样式</span></button>
+          <button class="tab" data-tab="firmware"><span class="nav-icon">⇧</span><span>固件升级</span><em>NEW</em></button>
           <button class="tab" data-tab="debug"><span class="nav-icon">›_</span><span>调试日志</span></button>
         </nav>
 
         <div class="sidebar-foot">
           <div><span class="sidebar-foot-dot"></span> WebHID / CDC</div>
-          <small>v1.5.0 · PER-KEY EFFECTS</small>
+          <small>v1.6.0 · SAFE UF2 FLASH</small>
         </div>
       </aside>
 
@@ -206,27 +207,12 @@
           </div>
         </div>
 
-        <details class="rgb-diagnostics card" open>
-          <summary><span>主键盘 RGB 通道状态</span><em id="rgbDiagStatus">RAM_FRAME_V2</em></summary>
-          <div class="rgb-diag-body">
-            <p>安全诊断只读取 VIA、Layer、CDC 与轴灯基础参数。整帧写入走 <code>07 16 05</code>，每帧 BEGIN + 13 DATA + COMMIT，不会 SAVE / EEPROM。</p>
-            <div class="rgb-diag-actions">
-              <button class="primary" id="rgbDiagRunBtn">运行安全诊断</button>
-              <button class="ghost" id="rgbDiagExportBtn" disabled>导出诊断 JSON</button>
-              <button class="ghost danger-text hidden" id="rgbDiagD1Btn" title="旧版点阵诊断保留项">旧版 D1 诊断</button>
-            </div>
-            <div class="rgb-diag-summary ok" id="rgbDiagSummary">RAM_FRAME_V2 已完成 91 灯、全黑、原子刷新、乱序拒绝与恢复实机验证。</div>
-            <pre class="rgb-diag-details" id="rgbDiagDetails">—</pre>
-            <p class="rgb-diag-foot">正式版默认使用实机验证稳定的 10 ms / 4 FPS。静态帧使用 50 ms 安全间隔；不稳定的 5 ms 与 0 ms 档已移除。</p>
-          </div>
-        </details>
-
         <div class="rgb-editor-layout">
           <article class="card rgb-painter-card">
             <div class="rgb-painter-head">
               <div>
                 <strong id="rgbFrameTitle">Frame 1</strong>
-                <span id="rgbPainterStatus">黑色＝真正熄灭 · 拖动涂色 · 宽键自动同步多颗灯 · 浏览器自动保存当前工作区</span>
+                <span id="rgbPainterStatus">左键点击/拖动上色 · 从已亮键开始可连续熄灭 · 宽键自动同步多颗灯 · 浏览器自动保存当前工作区</span>
               </div>
               <div class="rgb-progress-inline"><span id="rgbWriteProgress">就绪</span></div>
             </div>
@@ -245,6 +231,22 @@
             <div class="rgb-note">
               <strong>注意：</strong>颜色通过 RGB888 整帧写入 RAM，不会写 EEPROM；断电、拔插或点击“退出接管”后恢复官方灯效。关闭或刷新页面时网页也会尽力自动退出接管。
             </div>
+            <section class="rgb-frame-library">
+              <div class="rgb-frame-library-head"><strong>动画帧预览</strong><span>点击切换 · 拖动调整顺序</span></div>
+              <div class="rgb-frame-list" id="rgbFrameList"></div>
+              <details class="rgb-calibration">
+                <summary>LED 物理映射（已验证）</summary>
+                <p>已固化 0–90 共 91 颗灯。Backspace、反斜杠、Enter、左 Shift、Space 和右 Alt 会自动控制对应的多颗灯。</p>
+                <div class="rgb-cal-row"><span>当前键</span><strong id="rgbSelectedKeyLabel">未选择</strong></div>
+                <label>LED Index <input id="rgbLedIndexInput" type="text" value="未选择" readonly></label>
+                <div class="inline-actions hidden">
+                  <button class="ghost compact" id="rgbSetLedIndexBtn" disabled>固定映射</button>
+                  <button class="ghost compact" id="rgbTestLedIndexBtn" disabled>无需测试</button>
+                  <button class="ghost compact danger-text" id="rgbResetLedMapBtn">重新载入验证映射</button>
+                </div>
+                <div class="rgb-map-meta" id="rgbMapMeta">固定映射：91/91 已实机验证（宽键自动控制多颗灯）</div>
+              </details>
+            </section>
           </article>
 
           <aside class="card rgb-frames-card">
@@ -266,7 +268,7 @@
                 <button class="ghost compact" id="rgbEffectSelectBtn">开始选择效果按键</button>
                 <button class="ghost compact" id="rgbEffectSelectAllBtn">全选</button>
                 <button class="ghost compact danger-text" id="rgbEffectClearSelectionBtn">清空</button>
-                <span id="rgbEffectSelectionStatus">未选择时作用于全键盘</span>
+                <span id="rgbEffectSelectionStatus">未选择时作用于全键盘 · 可按住拖选</span>
               </div>
               <label class="field">效果类型
                 <select id="rgbEffectType">
@@ -311,21 +313,23 @@
                 <input id="rgbProjectFileInput" type="file" accept="application/json,.json" hidden>
               </div>
             </div>
-            <div class="rgb-frame-list" id="rgbFrameList"></div>
-            <details class="rgb-calibration">
-              <summary>LED 物理映射（已验证）</summary>
-              <p>已固化 0–90 共 91 颗灯。Backspace、反斜杠、Enter、左 Shift、Space 和右 Alt 会自动控制对应的多颗灯。</p>
-              <div class="rgb-cal-row"><span>当前键</span><strong id="rgbSelectedKeyLabel">未选择</strong></div>
-              <label>LED Index <input id="rgbLedIndexInput" type="text" value="未选择" readonly></label>
-              <div class="inline-actions hidden">
-                <button class="ghost compact" id="rgbSetLedIndexBtn" disabled>固定映射</button>
-                <button class="ghost compact" id="rgbTestLedIndexBtn" disabled>无需测试</button>
-                <button class="ghost compact danger-text" id="rgbResetLedMapBtn">重新载入验证映射</button>
-              </div>
-              <div class="rgb-map-meta" id="rgbMapMeta">固定映射：91/91 已实机验证（宽键自动控制多颗灯）</div>
-            </details>
           </aside>
         </div>
+
+        <details class="rgb-diagnostics card">
+          <summary><span>主键盘 RGB 通道状态</span><em id="rgbDiagStatus">RAM_FRAME_V2</em></summary>
+          <div class="rgb-diag-body">
+            <p>安全诊断只读取 VIA、Layer、CDC 与轴灯基础参数。整帧写入走 <code>07 16 05</code>，每帧 BEGIN + 13 DATA + COMMIT，不会 SAVE / EEPROM。</p>
+            <div class="rgb-diag-actions">
+              <button class="primary" id="rgbDiagRunBtn">运行安全诊断</button>
+              <button class="ghost" id="rgbDiagExportBtn" disabled>导出诊断 JSON</button>
+              <button class="ghost danger-text hidden" id="rgbDiagD1Btn" title="旧版点阵诊断保留项">旧版 D1 诊断</button>
+            </div>
+            <div class="rgb-diag-summary ok" id="rgbDiagSummary">RAM_FRAME_V2 已完成 91 灯、全黑、原子刷新、乱序拒绝与恢复实机验证。</div>
+            <pre class="rgb-diag-details" id="rgbDiagDetails">—</pre>
+            <p class="rgb-diag-foot">正式版默认使用实机验证稳定的 10 ms / 4 FPS。静态帧使用 50 ms 安全间隔；不稳定的 5 ms 与 0 ms 档已移除。</p>
+          </div>
+        </details>
       </section>
 
       <section class="tab-panel" id="tab-screen">
@@ -699,6 +703,69 @@
         </div>
       </section>
 
+      <section class="tab-panel" id="tab-firmware">
+        <div class="section-title">
+          <div>
+            <h2>QK80 MK2 UF2 固件升级</h2>
+            <p>在浏览器中校验 UF2，然后写入键盘引导盘。本页不会在后台自动刷写，最后一步必须由你手动选择键盘引导盘。</p>
+          </div>
+        </div>
+
+        <div class="firmware-warning card">
+          <strong>⚠ 固件刷写有风险</strong>
+          <p>请使用键盘原装 USB 线、直连电脑 USB 口，刷写期间不要断电、拔线或关闭页面。自制固件若出现任何问题，请立即刷回 Qwertykeys 官方固件。</p>
+          <div class="firmware-official-links">
+            <a class="ghost button-link" href="https://www.qwertykeys.com/pages/fw" target="_blank" rel="noopener noreferrer">QK 官方固件下载</a>
+            <a class="ghost button-link" href="https://qwertykeys.notion.site/QK80-Mk2-Firmware-Upgrade-Guide-1233d090094280efb7a3d8b8c0dba801" target="_blank" rel="noopener noreferrer">QK80 MK2 官方升级教程</a>
+            <a class="ghost button-link" href="https://www.qkcfg.com/" target="_blank" rel="noopener noreferrer">QK HUB 官方驱动</a>
+          </div>
+        </div>
+
+        <div class="firmware-layout">
+          <article class="card firmware-card">
+            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 1</span><h3>选择并校验固件</h3></div><span id="firmwareValidationBadge" class="firmware-badge">未选择</span></div>
+            <div class="firmware-choice-grid">
+              <button class="primary" id="firmwareUseBundledBtn">使用内置 RAM_FRAME_V3 自制 PLC 固件</button>
+              <button class="ghost" id="firmwareChooseFileBtn">选择本地 .uf2</button>
+              <input id="firmwareFileInput" type="file" accept=".uf2,application/octet-stream" hidden>
+            </div>
+            <div class="firmware-file-summary" id="firmwareFileSummary">
+              <div><span>文件</span><strong>—</strong></div>
+              <div><span>控制器</span><strong>—</strong></div>
+              <div><span>UF2 块</span><strong>—</strong></div>
+              <div><span>地址范围</span><strong>—</strong></div>
+              <div><span>大小</span><strong>—</strong></div>
+              <div><span>SHA-256</span><strong>—</strong></div>
+            </div>
+            <p class="setting-note">仅接受结构完整、块序号连续且 Family ID 为 QK80 MK2 Master <code>0x514B4D02</code> 或 PLC <code>0x514B4D50</code> 的 UF2。内置自制固件只适用于 PLC。</p>
+          </article>
+
+          <article class="card firmware-card">
+            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 2</span><h3>进入引导模式</h3></div><span class="firmware-badge neutral">手动操作</span></div>
+            <ol class="firmware-steps">
+              <li>先退出 RGB 接管，关闭其他 QK 驱动页面。</li>
+              <li>按你之前刷写时的方式，让对应的 Master 或 PLC 进入 UF2 引导模式。</li>
+              <li>Windows 出现新的可移动引导盘后，再执行第 3 步。</li>
+            </ol>
+            <div class="firmware-target-warning" id="firmwareTargetWarning">当前尚未选择固件。请勿把 PLC 固件写入 Master 引导盘，反之亦然。</div>
+          </article>
+
+          <article class="card firmware-card firmware-flash-card">
+            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 3</span><h3>写入键盘引导盘</h3></div><span id="firmwareWriteBadge" class="firmware-badge neutral">等待</span></div>
+            <label class="checkline firmware-confirm"><input id="firmwareRiskConfirm" type="checkbox">我已保留官方固件，已确认 Master / PLC 目标，并了解刷写期间断电可能导致设备无法启动。</label>
+            <label class="field firmware-phrase-label">输入 <strong id="firmwareConfirmPhraseHint">FLASH</strong> 确认
+              <input id="firmwareConfirmPhrase" type="text" placeholder="先选择有效 UF2" autocomplete="off" spellcheck="false">
+            </label>
+            <button class="danger-button firmware-write-button" id="firmwareWriteBtn" disabled>选择键盘引导盘并写入 UF2</button>
+            <div class="firmware-progress hidden" id="firmwareProgressWrap">
+              <progress id="firmwareProgress" max="100" value="0"></progress>
+              <span id="firmwareProgressText">0%</span>
+            </div>
+            <div class="firmware-result" id="firmwareResult">待固件通过校验后才会启用写入按钮。若浏览器不支持直接写入，页面会下载 UF2，请手动复制到引导盘。</div>
+          </article>
+        </div>
+      </section>
+
       <section class="tab-panel" id="tab-debug">
         <div class="section-title">
           <div><h2>调试日志</h2><p>显示本页发出的 HID / CDC 数据，方便继续逆向。</p></div>
@@ -709,7 +776,7 @@
     </main>
 
     <footer>
-      <span>QK80 MK2 Web Driver v1.5.0</span>
+      <span>QK80 MK2 Web Driver v1.6.0</span>
       <span>使用前请关闭 QK 官方网页；COM 串口同一时间只能由一个页面占用。</span>
     </footer>
       </div>

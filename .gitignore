@@ -1,0 +1,6 @@
+.tools/
+analysis/
+tools/
+*.zip
+Thumbs.db
+.DS_Store

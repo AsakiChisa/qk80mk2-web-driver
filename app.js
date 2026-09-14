@@ -38,6 +38,16 @@
   const SCREEN_HEIGHT = 172;
   const SCREEN_FRAME_BYTES = SCREEN_WIDTH * SCREEN_HEIGHT * 2;
   const SCREEN_MAX_FRAMES = 500;
+  const UF2_BLOCK_SIZE = 512;
+  const UF2_MAGIC_START0 = 0x0a324655;
+  const UF2_MAGIC_START1 = 0x9e5d5157;
+  const UF2_MAGIC_END = 0x0ab16f30;
+  const UF2_FLAG_FAMILY_ID = 0x00002000;
+  const UF2_FAMILIES = new Map([
+    [0x514b4d02, { key: 'MASTER', label: 'QK80 MK2 Master', minAddress: 0x00020000, maxAddress: 0x00200000 }],
+    [0x514b4d50, { key: 'PLC', label: 'QK80 MK2 PLC', minAddress: 0x08000000, maxAddress: 0x08200000 }],
+  ]);
+  const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_RAM_FRAME_V3_MASK_COLOR_UNFLASHED_CANDIDATE.uf2';
 
   // QK80 MK2 / QMK lighting mode tables, verified against the original QK UI.
   // 0x15 uses the classic RGBLIGHT mode numbering; 0x16 uses RGB Matrix mode numbering.
@@ -76,7 +86,8 @@
     'rgbReadBtn','rgbSaveStaticBtn','rgbExitTakeoverBtn','rgbClearFrameBtn','rgbPaintColor','rgbPalette','rgbFillBtn','rgbNeutralBtn','rgbPreviewFps','rgbPreviewBtn','rgbLiveFps','rgbLiveBtn','rgbFrameTitle','rgbPainterStatus','rgbWriteProgress','rgbKeyboard','rgbFrameCounter','rgbAddFrameBtn','rgbDuplicateFrameBtn','rgbDeleteFrameBtn','rgbFrameList','rgbSelectedKeyLabel','rgbLedIndexInput','rgbSetLedIndexBtn','rgbTestLedIndexBtn','rgbResetLedMapBtn','rgbMapMeta','rgbActualFps','rgbLiveFrameStat','rgbLiveKeysStat','rgbLiveLatencyStat','rgbDroppedStat','rgbEffectType','rgbEffectColorA','rgbEffectColorB','rgbEffectFrames','rgbEffectPeriod','rgbBreathMin','rgbEffectDirection','rgbGenerateEffectBtn','rgbSmoothEffectBtn','rgbEffectSelectBtn','rgbEffectSelectAllBtn','rgbEffectClearSelectionBtn','rgbEffectSelectionStatus','rgbEffectStatus','rgbProjectName','rgbProjectSelect','rgbSaveProjectBtn','rgbLoadProjectBtn','rgbDeleteProjectBtn','rgbExportProjectBtn','rgbImportProjectBtn','rgbProjectFileInput','rgbProjectStatus',
     'rgbDiagRunBtn','rgbDiagExportBtn','rgbDiagD1Btn','rgbDiagStatus','rgbDiagSummary','rgbDiagDetails',
     'profileName','exportProfileBtn','profileExportStatus','profileFileInput','profileSummary','profileApplyConnection','profileApplyMatrix','applyProfileBtn',
-    'readDeviceSettingsBtn','magicNkro','magicGui','magicAltGui','magicCapsCtrl','saveMagicBtn','featureLedPower','featureSleep','featureDebounceMode','featureDebounceDelay','saveFeaturesBtn','browserClock','syncTimeBtn','connectMode','saveConnectModeBtn','clearCurrentBindBtn','clearAllBindsBtn','receiverDfuBtn','resetConfirm','eepromResetBtn'
+    'readDeviceSettingsBtn','magicNkro','magicGui','magicAltGui','magicCapsCtrl','saveMagicBtn','featureLedPower','featureSleep','featureDebounceMode','featureDebounceDelay','saveFeaturesBtn','browserClock','syncTimeBtn','connectMode','saveConnectModeBtn','clearCurrentBindBtn','clearAllBindsBtn','receiverDfuBtn','resetConfirm','eepromResetBtn',
+    'firmwareUseBundledBtn','firmwareChooseFileBtn','firmwareFileInput','firmwareValidationBadge','firmwareFileSummary','firmwareTargetWarning','firmwareRiskConfirm','firmwareConfirmPhraseHint','firmwareConfirmPhrase','firmwareWriteBtn','firmwareWriteBadge','firmwareProgressWrap','firmwareProgress','firmwareProgressText','firmwareResult'
   ].map(id => [id, document.getElementById(id)]));
 
   let hidDevice = null;
@@ -118,6 +129,16 @@
   let rgbSmoothRunning = false;
   let rgbEffectSelectionMode = false;
   const rgbEffectSelection = new Set();
+  let rgbEffectDragPointer = null;
+  let rgbEffectDragAdd = true;
+  const rgbEffectDragVisited = new Set();
+  let rgbPaintDragPointer = null;
+  let rgbPaintDragColor = null;
+  let rgbPaintDragLastX = null;
+  let rgbPaintDragLastY = null;
+  const rgbPaintDragVisited = new Set();
+  let selectedFirmware = null;
+  let firmwareWriteBusy = false;
   let rgbSelectedVisualIndex = -1;
   let rgbLedMap = [];
   let rgbLastSentFrame = null;
@@ -1289,7 +1310,7 @@
     if (els.rgbEffectSelectionStatus) {
       els.rgbEffectSelectionStatus.textContent = rgbEffectSelection.size
         ? `已选择 ${rgbEffectSelection.size} 个键 · ${physical.size} 颗灯`
-        : '未选择时作用于全键盘';
+        : '未选择时作用于全键盘 · 可按住拖选';
     }
     if (els.rgbEffectSelectBtn) {
       els.rgbEffectSelectBtn.textContent = rgbEffectSelectionMode ? '完成选择' : '开始选择效果按键';
@@ -1310,6 +1331,16 @@
     else rgbEffectSelection.add(index);
     updateRgbEffectSelectionUi();
   }
+
+  function beginRgbEffectSelectionDrag(event,index){
+    rgbEffectDragPointer=event.pointerId;rgbEffectDragAdd=!rgbEffectSelection.has(index);rgbEffectDragVisited.clear();applyRgbEffectSelectionDrag(index);
+  }
+  function applyRgbEffectSelectionDrag(index){
+    if(!rgbEffectSelectionMode||rgbEffectDragPointer===null||rgbEffectDragVisited.has(index))return;
+    rgbEffectDragVisited.add(index);if(!VERIFIED_RGB_LED_GROUPS[index]?.length)return;
+    if(rgbEffectDragAdd)rgbEffectSelection.add(index);else rgbEffectSelection.delete(index);updateRgbEffectSelectionUi();
+  }
+  function finishRgbEffectSelectionDrag(){rgbEffectDragPointer=null;rgbEffectDragVisited.clear();}
 
   function rgbEffectTargetIndices() {
     return rgbEffectSelection.size ? [...rgbEffectSelection] : qkLayout.map((_, index) => index).filter(index => VERIFIED_RGB_LED_GROUPS[index].length);
@@ -1341,6 +1372,47 @@
     scheduleRgbWorkspaceSave();
   }
 
+  function beginRgbPaintDrag(event, index) {
+    ensureRgbState();
+    rgbPaintDragPointer = event.pointerId;
+    rgbPaintDragColor = rgbFrames[rgbCurrentFrame][index] === RGB_OFF
+      ? normalizeRgbFrameColor(els.rgbPaintColor.value)
+      : RGB_OFF;
+    rgbPaintDragLastX = event.clientX;
+    rgbPaintDragLastY = event.clientY;
+    rgbPaintDragVisited.clear();
+    applyRgbPaintDrag(index);
+  }
+
+  function applyRgbPaintDrag(index) {
+    if (rgbPaintDragPointer === null || rgbPaintDragVisited.has(index)) return;
+    rgbPaintDragVisited.add(index);
+    paintRgbKey(index, rgbPaintDragColor);
+  }
+
+  function finishRgbPaintDrag() {
+    rgbPaintDragPointer = null;
+    rgbPaintDragLastX = null;
+    rgbPaintDragLastY = null;
+    rgbPaintDragVisited.clear();
+  }
+
+  function applyRgbPaintPath(event) {
+    const startX = rgbPaintDragLastX ?? event.clientX;
+    const startY = rgbPaintDragLastY ?? event.clientY;
+    const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
+    const steps = Math.max(1, Math.ceil(distance / 6));
+    for (let step = 1; step <= steps; step++) {
+      const ratio = step / steps;
+      const x = startX + (event.clientX - startX) * ratio;
+      const y = startY + (event.clientY - startY) * ratio;
+      const hit = document.elementFromPoint(x, y)?.closest?.('.rgb-keycap');
+      if (hit && els.rgbKeyboard.contains(hit)) applyRgbPaintDrag(Number(hit.dataset.rgbIndex));
+    }
+    rgbPaintDragLastX = event.clientX;
+    rgbPaintDragLastY = event.clientY;
+  }
+
   function buildRgbKeyboard() {
     ensureRgbState();
     els.rgbKeyboard.innerHTML = '';
@@ -1351,18 +1423,11 @@
       b.dataset.rgbIndex=i; b.dataset.ledIndex=ledGroup.join(',');
       b.style.setProperty('--kx',item.x); b.style.setProperty('--ky',item.y); b.style.setProperty('--ku',item.w||1);
       b.innerHTML = `<span>${item.label}</span><small>${ledGroup.length ? `LED ${ledGroup.join('/')}` : 'LED —'}</small>`;
-      const paint = (e, color) => { e.preventDefault(); paintRgbKey(i,color); };
       b.addEventListener('pointerdown', e => {
-        if(e.button===0 && rgbEffectSelectionMode){e.preventDefault();toggleRgbEffectKey(i);}
-        else if(e.button===0) paint(e, els.rgbPaintColor.value);
-        else if(e.button===2) paint(e, RGB_OFF);
+        if(e.button===0 && rgbEffectSelectionMode){e.preventDefault();beginRgbEffectSelectionDrag(e,i);}
+        else if(e.button===0){e.preventDefault();beginRgbPaintDrag(e,i);}
       });
-      b.addEventListener('pointerover', e => {
-        if(rgbEffectSelectionMode)return;
-        if(e.buttons&1) paint(e, els.rgbPaintColor.value);
-        else if(e.buttons&2) paint(e, RGB_OFF);
-      });
-      b.addEventListener('contextmenu', e => { e.preventDefault(); if(!rgbEffectSelectionMode)paintRgbKey(i,RGB_OFF); });
+      b.addEventListener('contextmenu', e => e.preventDefault());
       els.rgbKeyboard.appendChild(b);
     });
     renderRgbFrame();
@@ -2695,6 +2760,85 @@
   async function applyChannelValues(block){if(!block?.values)return;for(const [id,v] of Object.entries(block.values))await writeCustomNoSave(Number(block.channel),Number(id),Array.from(v));await commitCustom(Number(block.channel));}
   async function writeAllLayers(layers){const flat=[];for(const layer of layers)for(const code of layer){flat.push((code>>8)&0xff,code&0xff);}for(let off=0;off<flat.length;off+=28){const chunk=flat.slice(off,off+28);await hidCommand(CMD.SET_KEYMAP_BUFFER,[(off>>8)&0xff,off&0xff,chunk.length,...chunk],1800);}}
   function downloadJson(obj,filename){const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),500);}
+
+  function uf2Hex(value){return `0x${Number(value).toString(16).toUpperCase().padStart(8,'0')}`;}
+  function humanBytes(value){if(value<1024)return `${value} B`;if(value<1024*1024)return `${(value/1024).toFixed(1)} KB`;return `${(value/1024/1024).toFixed(2)} MB`;}
+  async function sha256Hex(buffer){const hash=await crypto.subtle.digest('SHA-256',buffer);return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();}
+  async function parseQkUf2(name,buffer){
+    if(!(buffer instanceof ArrayBuffer)||buffer.byteLength<UF2_BLOCK_SIZE||buffer.byteLength%UF2_BLOCK_SIZE)throw new Error('UF2 文件长度不是 512 字节块的整数倍。');
+    const blockCount=buffer.byteLength/UF2_BLOCK_SIZE;
+    if(blockCount>8192)throw new Error('UF2 文件过大，已拒绝。');
+    const view=new DataView(buffer),seen=new Set(),addresses=new Set();let declaredTotal=null,familyId=null,minAddress=0xffffffff,maxAddress=0;
+    for(let i=0;i<blockCount;i++){
+      const off=i*UF2_BLOCK_SIZE,magic0=view.getUint32(off,true),magic1=view.getUint32(off+4,true),flags=view.getUint32(off+8,true),target=view.getUint32(off+12,true),payloadSize=view.getUint32(off+16,true),blockNo=view.getUint32(off+20,true),total=view.getUint32(off+24,true),family=view.getUint32(off+28,true),end=view.getUint32(off+508,true);
+      if(magic0!==UF2_MAGIC_START0||magic1!==UF2_MAGIC_START1||end!==UF2_MAGIC_END)throw new Error(`第 ${i+1} 个 UF2 块魔数错误。`);
+      if(!(flags&UF2_FLAG_FAMILY_ID))throw new Error(`第 ${i+1} 个 UF2 块没有 Family ID。`);
+      if(payloadSize!==256)throw new Error(`第 ${i+1} 个 UF2 块 payload 不是 QK 固件使用的 256 字节。`);
+      if(!total||total!==blockCount||blockNo>=total)throw new Error(`第 ${i+1} 个 UF2 块的序号或总块数无效。`);
+      if(declaredTotal===null)declaredTotal=total;else if(declaredTotal!==total)throw new Error('UF2 各块声明的总块数不一致。');
+      if(familyId===null)familyId=family;else if(familyId!==family)throw new Error('UF2 中混入了不同 Family ID。');
+      if(seen.has(blockNo))throw new Error(`UF2 块序号 ${blockNo} 重复。`);seen.add(blockNo);
+      if(target%256||addresses.has(target))throw new Error(`UF2 目标地址 ${uf2Hex(target)} 未对齐或重复。`);addresses.add(target);
+      minAddress=Math.min(minAddress,target);maxAddress=Math.max(maxAddress,target+payloadSize);
+    }
+    for(let i=0;i<blockCount;i++)if(!seen.has(i))throw new Error(`UF2 缺少块序号 ${i}。`);
+    const family=UF2_FAMILIES.get(familyId);
+    if(!family)throw new Error(`不支持的 UF2 Family ID：${uf2Hex(familyId)}。仅允许 QK80 MK2 Master / PLC。`);
+    if(minAddress<family.minAddress||maxAddress>family.maxAddress)throw new Error(`${family.label} 的目标地址范围异常：${uf2Hex(minAddress)}–${uf2Hex(maxAddress)}。`);
+    return {name,size:buffer.byteLength,blockCount,familyId,family,minAddress,maxAddress,sha256:await sha256Hex(buffer)};
+  }
+  function firmwareSummaryFields(){return els.firmwareFileSummary?.querySelectorAll('strong')||[];}
+  function setFirmwareResult(message,state=''){if(!els.firmwareResult)return;els.firmwareResult.textContent=message;els.firmwareResult.className=`firmware-result ${state}`.trim();}
+  function resetFirmwareSelection(message='尚未选择固件。'){
+    selectedFirmware=null;const fields=firmwareSummaryFields();['—','—','—','—','—','—'].forEach((v,i)=>{if(fields[i])fields[i].textContent=v;});
+    if(els.firmwareValidationBadge){els.firmwareValidationBadge.textContent='未选择';els.firmwareValidationBadge.className='firmware-badge';}
+    if(els.firmwareTargetWarning){els.firmwareTargetWarning.textContent=message+' 请勿把 PLC 固件写入 Master 引导盘，反之亦然。';els.firmwareTargetWarning.className='firmware-target-warning';}
+    if(els.firmwareRiskConfirm)els.firmwareRiskConfirm.checked=false;if(els.firmwareConfirmPhraseHint)els.firmwareConfirmPhraseHint.textContent='FLASH';if(els.firmwareConfirmPhrase){els.firmwareConfirmPhrase.value='';els.firmwareConfirmPhrase.placeholder='先选择有效 UF2';}
+    if(els.firmwareWriteBadge){els.firmwareWriteBadge.textContent='等待';els.firmwareWriteBadge.className='firmware-badge neutral';}if(els.firmwareProgressWrap)els.firmwareProgressWrap.classList.add('hidden');if(els.firmwareProgress)els.firmwareProgress.value=0;if(els.firmwareProgressText)els.firmwareProgressText.textContent='0%';
+    updateFirmwareWriteAvailability();
+  }
+  function updateFirmwareWriteAvailability(){
+    const phrase=selectedFirmware?`FLASH ${selectedFirmware.meta.family.key}`:'FLASH';
+    if(els.firmwareConfirmPhraseHint)els.firmwareConfirmPhraseHint.textContent=phrase;
+    if(els.firmwareWriteBtn)els.firmwareWriteBtn.disabled=firmwareWriteBusy||!selectedFirmware||!els.firmwareRiskConfirm?.checked||els.firmwareConfirmPhrase?.value.trim().toUpperCase()!==phrase;
+  }
+  async function selectFirmwareBytes(name,buffer,source){
+    resetFirmwareSelection('正在校验固件…');
+    try{
+      const meta=await parseQkUf2(name,buffer);selectedFirmware={name,buffer,meta,source};
+      const fields=firmwareSummaryFields(),values=[name,`${meta.family.label} · ${uf2Hex(meta.familyId)}`,`${meta.blockCount} blocks`,`${uf2Hex(meta.minAddress)}–${uf2Hex(meta.maxAddress)}`,humanBytes(meta.size),meta.sha256];values.forEach((v,i)=>{if(fields[i])fields[i].textContent=v;});
+      els.firmwareValidationBadge.textContent='校验通过';els.firmwareValidationBadge.className='firmware-badge ok';
+      els.firmwareTargetWarning.textContent=`目标必须是 ${meta.family.label} 引导盘。当前文件不能刷入另一颗控制器。`;els.firmwareTargetWarning.className='firmware-target-warning ready';
+      els.firmwareConfirmPhrase.value='';els.firmwareConfirmPhrase.placeholder=`输入 FLASH ${meta.family.key}`;setFirmwareResult(`已校验：${source}。写入前请再次核对目标为 ${meta.family.label}。`,'ok');
+    }catch(err){resetFirmwareSelection('固件校验失败。');els.firmwareValidationBadge.textContent='已拒绝';els.firmwareValidationBadge.className='firmware-badge bad';setFirmwareResult(err.message,'bad');throw err;}finally{updateFirmwareWriteAvailability();}
+  }
+  async function useBundledFirmware(){
+    els.firmwareUseBundledBtn.disabled=true;setFirmwareResult('正在读取并校验内置 RAM_FRAME_V3 PLC 固件…');
+    try{const response=await fetch(BUNDLED_PLC_UF2,{cache:'no-store'});if(!response.ok)throw new Error(`内置固件读取失败：HTTP ${response.status}`);await selectFirmwareBytes(BUNDLED_PLC_UF2.split('/').pop(),await response.arrayBuffer(),'网页内置自制固件');}
+    finally{els.firmwareUseBundledBtn.disabled=false;}
+  }
+  async function chooseFirmwareFile(file){if(!file)return;if(!/\.uf2$/i.test(file.name))throw new Error('请选择 .uf2 固件文件。');if(file.size>4*1024*1024)throw new Error('UF2 文件超过 4 MB，已拒绝。');await selectFirmwareBytes(file.name,await file.arrayBuffer(),'本地文件');}
+  function downloadSelectedFirmware(){
+    if(!selectedFirmware)return;const blob=new Blob([selectedFirmware.buffer],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=selectedFirmware.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setFirmwareResult('浏览器不支持直接写入引导盘，UF2 已下载。请把该文件手动复制到正确的键盘引导盘。','warn');
+  }
+  async function writeSelectedFirmware(){
+    if(!selectedFirmware)throw new Error('请先选择并校验 UF2。');if(firmwareWriteBusy)return;
+    const phrase=`FLASH ${selectedFirmware.meta.family.key}`;if(!els.firmwareRiskConfirm.checked||els.firmwareConfirmPhrase.value.trim().toUpperCase()!==phrase)throw new Error(`请勾选风险确认并输入 ${phrase}。`);
+    if(!window.showSaveFilePicker){downloadSelectedFirmware();return;}
+    if(!confirm(`下一步会打开“另存为”窗口。\n\n只可选择 ${selectedFirmware.meta.family.label} 的 UF2 引导盘根目录，不要选择电脑普通磁盘，也不要选择另一颗控制器。\n\n刷写期间不要断电。继续吗？`))return;
+    firmwareWriteBusy=true;updateFirmwareWriteAvailability();els.firmwareWriteBadge.textContent='写入中';els.firmwareWriteBadge.className='firmware-badge';els.firmwareProgressWrap.classList.remove('hidden');els.firmwareProgress.value=5;els.firmwareProgressText.textContent='等待选择引导盘…';setFirmwareResult(`请选择 ${selectedFirmware.meta.family.label} 引导盘，并保持文件名 ${selectedFirmware.name}。`,'warn');
+    let writable=null,written=false;
+    try{
+      const handle=await window.showSaveFilePicker({suggestedName:selectedFirmware.name,types:[{description:'UF2 firmware',accept:{'application/octet-stream':['.uf2']}}],excludeAcceptAllOption:true});
+      els.firmwareProgress.value=20;els.firmwareProgressText.textContent='正在写入 UF2…';writable=await handle.createWritable();await writable.write(new Uint8Array(selectedFirmware.buffer));written=true;els.firmwareProgress.value=90;els.firmwareProgressText.textContent='正在完成写入…';await writable.close();writable=null;els.firmwareProgress.value=100;els.firmwareProgressText.textContent='100% · 已完成';els.firmwareWriteBadge.textContent='已完成';els.firmwareWriteBadge.className='firmware-badge ok';setFirmwareResult('UF2 已写入。键盘可能会自动退出引导盘并重新连接；请等待设备稳定后再打开其他功能。若行为异常，请从页面上方入口下载并刷回官方固件。','ok');toast('固件文件写入完成');
+    }catch(err){
+      if(writable)try{await writable.abort();}catch{}
+      if(err?.name==='AbortError'){els.firmwareWriteBadge.textContent='已取消';els.firmwareWriteBadge.className='firmware-badge neutral';setFirmwareResult('已取消，没有开始写入。');}
+      else if(written){els.firmwareWriteBadge.textContent='需确认';els.firmwareWriteBadge.className='firmware-badge';setFirmwareResult('数据已发送，但引导盘在完成阶段断开。它可能正在自动重启；请先检查键盘能否正常连接。若不能，请重新进入引导模式并刷入官方固件。','warn');log('WARN',`UF2 完成阶段：${err.message}`);}
+      else{els.firmwareWriteBadge.textContent='失败';els.firmwareWriteBadge.className='firmware-badge bad';setFirmwareResult(`写入未完成：${err.message}。请重新进入引导模式，并优先刷入官方固件。`,'bad');throw err;}
+    }finally{firmwareWriteBusy=false;updateFirmwareWriteAvailability();}
+  }
+
   async function exportProfile(){
     if(!hidDevice?.opened)throw new Error('请先连接 HID。');els.profileExportStatus.textContent='正在读取键盘…';const layers=[];for(let i=0;i<layerCount;i++){els.profileExportStatus.textContent=`正在读取 Layer ${i+1}/${layerCount}…`;try{layers.push(await readLayerFast(i));}catch{layers.push(await readLayerSlow(i));}}
     const mc=await hidCommand(CMD.GET_MACRO_COUNT);const count=mc[1]||0;const macroRaw=count?Array.from(await getMacroBytes()):[];const lighting=await captureLightingProfile();const settings=await captureDeviceSettings();
@@ -2872,6 +3016,8 @@
     els.pixelGrid.addEventListener('pointerdown',e=>{const pixel=e.target.closest('.pixel');if(!pixel)return;e.preventDefault();matrixPaintMode=(e.button===2?'erase':'paint');matrixPaintLastIndex=-1;paintMatrixPixel(Number(pixel.dataset.index),matrixPaintMode);});
     els.pixelGrid.addEventListener('pointermove',e=>{if(!matrixPaintMode)return;const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.pixel');if(hit&&els.pixelGrid.contains(hit))paintMatrixPixel(Number(hit.dataset.index),matrixPaintMode);});
     window.addEventListener('pointerup',finishMatrixStroke);window.addEventListener('pointercancel',finishMatrixStroke);
+    els.rgbKeyboard?.addEventListener('pointermove',e=>{if(!rgbEffectSelectionMode&&rgbPaintDragPointer===e.pointerId){e.preventDefault();applyRgbPaintPath(e);return;}const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.rgb-keycap');if(!hit||!els.rgbKeyboard.contains(hit))return;if(rgbEffectSelectionMode&&rgbEffectDragPointer===e.pointerId){e.preventDefault();applyRgbEffectSelectionDrag(Number(hit.dataset.rgbIndex));}});
+    window.addEventListener('pointerup',e=>{if(!rgbEffectSelectionMode&&rgbPaintDragPointer===e.pointerId)applyRgbPaintPath(e);finishRgbEffectSelectionDrag();finishRgbPaintDrag();});window.addEventListener('pointercancel',()=>{finishRgbEffectSelectionDrag();finishRgbPaintDrag();});
     els.rgbDiagRunBtn?.addEventListener('click',()=>safe(runRgbDiagnostics));
     els.rgbDiagExportBtn?.addEventListener('click',()=>safe(async()=>exportRgbDiagnostics()));
     els.rgbDiagD1Btn?.addEventListener('click',()=>safe(runRgbD1RamProbe));
@@ -2891,7 +3037,7 @@
     els.rgbEffectType?.addEventListener('change',updateRgbEffectControls);
     els.rgbGenerateEffectBtn?.addEventListener('click',()=>safe(async()=>generateRgbEffect()));
     els.rgbSmoothEffectBtn?.addEventListener('click',()=>safe(toggleRgbSmoothEffect));
-    els.rgbEffectSelectBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}rgbEffectSelectionMode=!rgbEffectSelectionMode;updateRgbEffectSelectionUi();});
+    els.rgbEffectSelectBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}finishRgbEffectSelectionDrag();rgbEffectSelectionMode=!rgbEffectSelectionMode;updateRgbEffectSelectionUi();});
     els.rgbEffectSelectAllBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}qkLayout.forEach((_,index)=>{if(VERIFIED_RGB_LED_GROUPS[index].length)rgbEffectSelection.add(index);});updateRgbEffectSelectionUi();});
     els.rgbEffectClearSelectionBtn?.addEventListener('click',()=>{if(rgbSmoothRunning){toast('请先停止顺滑效果再修改选键',true);return;}rgbEffectSelection.clear();updateRgbEffectSelectionUi();});
     els.rgbSaveProjectBtn?.addEventListener('click',()=>safe(async()=>saveRgbProjectLocal()));
@@ -2919,6 +3065,12 @@
     els.macroRecordBtn.addEventListener('click',toggleMacroRecording);els.macroStopOverlayBtn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();stopMacroRecording();});
     els.macroClearBtn.addEventListener('click',()=>{syncMacroExpression('');els.macroStatus.textContent='宏已清空，尚未保存到键盘';});
     els.exportProfileBtn.addEventListener('click',()=>safe(exportProfile));els.profileFileInput.addEventListener('change',()=>{const f=els.profileFileInput.files?.[0];if(f)safe(()=>loadProfileFile(f));});els.applyProfileBtn.addEventListener('click',()=>safe(applyProfile));
+    els.firmwareUseBundledBtn?.addEventListener('click',()=>safe(useBundledFirmware));
+    els.firmwareChooseFileBtn?.addEventListener('click',()=>els.firmwareFileInput?.click());
+    els.firmwareFileInput?.addEventListener('change',()=>{const file=els.firmwareFileInput.files?.[0];els.firmwareFileInput.value='';if(file)safe(()=>chooseFirmwareFile(file));});
+    els.firmwareRiskConfirm?.addEventListener('change',updateFirmwareWriteAvailability);
+    els.firmwareConfirmPhrase?.addEventListener('input',updateFirmwareWriteAvailability);
+    els.firmwareWriteBtn?.addEventListener('click',()=>safe(writeSelectedFirmware));
     els.readDeviceSettingsBtn.addEventListener('click',()=>safe(readDeviceSettings));els.saveMagicBtn.addEventListener('click',()=>safe(saveMagic));els.saveFeaturesBtn.addEventListener('click',()=>safe(saveFeatures));els.syncTimeBtn.addEventListener('click',()=>safe(syncKeyboardTime));els.connectMode.addEventListener('change',updateConnectActionAvailability);els.saveConnectModeBtn.addEventListener('click',()=>safe(saveConnectMode));els.clearCurrentBindBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(3,'删除当前绑定')));els.clearAllBindsBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(4,'删除全部蓝牙绑定')));els.receiverDfuBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(5,'进入 2.4G Receiver DFU')));els.eepromResetBtn.addEventListener('click',()=>safe(eepromReset));
     if(navigator.hid)navigator.hid.addEventListener('disconnect',e=>{if(hidDevice===e.device){hidDevice=null;rgbLiveRunning=false;rgbSmoothRunning=false;rgbV2Takeover=false;els.rgbLiveBtn.textContent='▶ 实时播放到键盘';if(els.rgbSmoothEffectBtn)els.rgbSmoothEffectBtn.textContent='▶ 顺滑播放选中键';setDot(els.hidDot,false);els.hidInfo.textContent='已断开';els.connectHidBtn.textContent='连接 HID';updateHistoryButtons();toast('HID 已断开',true);}});
     if(navigator.serial)navigator.serial.addEventListener('disconnect',()=>{serialPort=null;setDot(els.serialDot,false);setDot(els.screenSerialDot,false);els.serialInfo.textContent='已断开';if(els.screenSerialInfo)els.screenSerialInfo.textContent='CDC 已断开';els.connectSerialBtn.textContent='连接 CDC';if(els.screenConnectSerialBtn)els.screenConnectSerialBtn.textContent='连接 CDC';els.cdcValue.textContent='待连接';});
@@ -2955,5 +3107,5 @@
     sync();
   }
 
-  checkEnvironment();buildLightingUI();buildLayerTabs();buildPhysicalKeyboard();buildKeyCategories();renderKeyPicker();updateRemapButtons();renderPixelGrid();renderFrameList();setScreenMode('image');ensureRgbState();restoreRgbWorkspace();ensureRgbState();buildRgbPalette();buildRgbKeyboard();renderRgbFrameList();refreshRgbProjectSelect();resetRgbLiveStats();updateRgbEffectControls();applyRgbPerKeyCapability(true);renderMacroList();loadMacroEditor();tickClock();setInterval(tickClock,1000);bindUI();bindShellStatus();updateConnectActionAvailability();initAppearance().catch(err=>console.warn('Appearance init failed',err));autoReconnect();
+  checkEnvironment();buildLightingUI();buildLayerTabs();buildPhysicalKeyboard();buildKeyCategories();renderKeyPicker();updateRemapButtons();renderPixelGrid();renderFrameList();setScreenMode('image');ensureRgbState();restoreRgbWorkspace();ensureRgbState();buildRgbPalette();buildRgbKeyboard();renderRgbFrameList();refreshRgbProjectSelect();resetRgbLiveStats();updateRgbEffectControls();applyRgbPerKeyCapability(true);renderMacroList();loadMacroEditor();tickClock();setInterval(tickClock,1000);bindUI();bindShellStatus();updateConnectActionAvailability();resetFirmwareSelection();initAppearance().catch(err=>console.warn('Appearance init failed',err));autoReconnect();
 })();
