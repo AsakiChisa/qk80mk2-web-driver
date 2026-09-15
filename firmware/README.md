@@ -1,5 +1,19 @@
 # QK80 MK2 PLC 自制固件
 
+## 首次安装需要 Master V2 + PLC V5
+
+新键盘或仍使用官方 Master 的用户，需要先刷入：
+
+`QK80MK2_MASTER_v1.1.1_RAM_FRAME_V2.uf2`
+
+SHA-256：
+
+```text
+6EFFF3D8A000F40FCE26E28C7E0A98F5E243137C0F69A298674B76FE5120708F
+```
+
+然后再刷入下方 PLC V5。已经刷过该精确 Master V2 的用户不需要重复刷写。Master 与 PLC 必须在 QK 官方驱动中分别选择正确的控制器目标。
+
 ## PERSISTENT_EFFECT_V5_BACKGROUND（已实机验收）
 
 `QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V5_BACKGROUND.uf2` 基于已实机验证的 V4，在保存呼吸/流动渐变参数时额外快照当前完整 91 灯 RGB888 底图。重新上电后先恢复底图，再由 PLC 约 31 FPS 只更新动画掩码中的灯。只需更新 PLC，Master 保持现有 V2。

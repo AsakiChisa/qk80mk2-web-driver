@@ -728,9 +728,10 @@
 
         <div class="firmware-layout">
           <article class="card firmware-card">
-            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 1</span><h3>选择最新版固件</h3></div><span id="firmwareValidationBadge" class="firmware-badge">未选择</span></div>
+            <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 1</span><h3>选择要升级的控制器固件</h3></div><span id="firmwareValidationBadge" class="firmware-badge">未选择</span></div>
             <div class="firmware-choice-grid">
-              <button class="primary" id="firmwareUseBundledBtn">选择最新版 PERSISTENT_EFFECT_V5</button>
+              <button class="ghost" id="firmwareUseBundledMasterBtn">首次安装①：选择 Master RAM_FRAME_V2</button>
+              <button class="primary" id="firmwareUseBundledBtn">首次安装② / 日常升级：选择 PLC V5</button>
             </div>
             <div class="firmware-file-summary" id="firmwareFileSummary">
               <div><span>文件</span><strong>—</strong></div>
@@ -740,15 +741,16 @@
               <div><span>大小</span><strong>—</strong></div>
               <div><span>SHA-256</span><strong>—</strong></div>
             </div>
-            <p class="setting-note"><strong>V5 已通过实机验收，可保存完整 91 灯静态底图和选中键动画，只适用于 PLC。</strong> 点击后会在本地检查 UF2 结构、Family ID、地址范围和 SHA-256；异常时请刷回官方固件。</p>
+            <p class="setting-note"><strong>首次安装必须分别刷入 Master V2 和 PLC V5；已经刷过 Master V2 的键盘只需升级 PLC V5。</strong> 两个文件均会在本地检查 UF2 结构、Family ID、地址范围和 SHA-256；每次刷写都要在官方驱动中确认控制器目标与文件一致。</p>
           </article>
 
           <article class="card firmware-card">
             <div class="firmware-card-head"><div><span class="appearance-kicker">STEP 2</span><h3>交给官方驱动刷入</h3></div><span id="firmwareWriteBadge" class="firmware-badge neutral">等待</span></div>
             <ol class="firmware-steps">
-              <li>点击下方按钮并确认后，网页会下载已校验的 V5 UF2，同时打开 QK 官方驱动。</li>
-              <li>在官方驱动的固件升级页面选择刚下载的 UF2。</li>
-              <li>确认目标是 PLC 后开始升级，完成前不要断电或拔线。</li>
+              <li>首次安装先选择并下载 Master V2，在官方驱动中确认目标为 Master 后升级。</li>
+              <li>然后返回本页选择并下载 PLC V5，在官方驱动中确认目标为 PLC 后升级。</li>
+              <li>已经刷过 Master V2 的用户可跳过第一步，只升级 PLC V5。</li>
+              <li>每次升级完成前不要断电或拔线，两个固件不能选错控制器。</li>
             </ol>
             <div class="firmware-target-warning" id="firmwareTargetWarning">请先选择最新版固件。本页不会直接写入键盘。</div>
             <button class="danger-button firmware-write-button" id="firmwareWriteBtn" disabled>下载固件并打开 QK 官方驱动</button>

@@ -47,6 +47,8 @@
     [0x514b4d02, { key: 'MASTER', label: 'QK80 MK2 Master', minAddress: 0x00020000, maxAddress: 0x00200000 }],
     [0x514b4d50, { key: 'PLC', label: 'QK80 MK2 PLC', minAddress: 0x08000000, maxAddress: 0x08200000 }],
   ]);
+  const BUNDLED_MASTER_UF2 = './firmware/QK80MK2_MASTER_v1.1.1_RAM_FRAME_V2.uf2';
+  const BUNDLED_MASTER_UF2_SHA256 = '6EFFF3D8A000F40FCE26E28C7E0A98F5E243137C0F69A298674B76FE5120708F';
   const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V5_BACKGROUND.uf2';
   const BUNDLED_PLC_UF2_SHA256 = 'B57584DDAFA212CF134BC0D6A5610F641A90DF1008677C35AAE88D12E27A9C60';
   const OFFICIAL_QK_UPDATER_URL = 'https://cfg.qwertykeys.com/';
@@ -89,7 +91,7 @@
     'rgbDiagRunBtn','rgbDiagExportBtn','rgbDiagD1Btn','rgbDiagStatus','rgbDiagSummary','rgbDiagDetails',
     'profileName','exportProfileBtn','profileExportStatus','profileFileInput','profileSummary','profileApplyConnection','profileApplyMatrix','applyProfileBtn',
     'readDeviceSettingsBtn','magicNkro','magicGui','magicAltGui','magicCapsCtrl','saveMagicBtn','featureLedPower','featureSleep','featureDebounceMode','featureDebounceDelay','saveFeaturesBtn','browserClock','syncTimeBtn','connectMode','saveConnectModeBtn','clearCurrentBindBtn','clearAllBindsBtn','receiverDfuBtn','resetConfirm','eepromResetBtn',
-    'firmwareUseBundledBtn','firmwareValidationBadge','firmwareFileSummary','firmwareTargetWarning','firmwareWriteBtn','firmwareWriteBadge','firmwareResult'
+    'firmwareUseBundledMasterBtn','firmwareUseBundledBtn','firmwareValidationBadge','firmwareFileSummary','firmwareTargetWarning','firmwareWriteBtn','firmwareWriteBadge','firmwareResult'
   ].map(id => [id, document.getElementById(id)]));
 
   let hidDevice = null;
@@ -2921,17 +2923,23 @@
       setFirmwareResult(`已校验：${source}。点击下一步后由 QK 官方驱动执行实际升级。`,'ok');
     }catch(err){resetFirmwareSelection('固件校验失败。');els.firmwareValidationBadge.textContent='已拒绝';els.firmwareValidationBadge.className='firmware-badge bad';setFirmwareResult(err.message,'bad');throw err;}finally{updateFirmwareWriteAvailability();}
   }
-  async function useBundledFirmware(){
-    els.firmwareUseBundledBtn.disabled=true;setFirmwareResult('正在读取并校验内置 PERSISTENT_EFFECT_V5 PLC 固件…');
-    try{const response=await fetch(BUNDLED_PLC_UF2,{cache:'no-store'});if(!response.ok)throw new Error(`内置固件读取失败：HTTP ${response.status}`);await selectFirmwareBytes(BUNDLED_PLC_UF2.split('/').pop(),await response.arrayBuffer(),'网页内置最新版 V5',BUNDLED_PLC_UF2_SHA256);}
-    finally{els.firmwareUseBundledBtn.disabled=false;}
+  async function useBundledFirmware(kind='plc'){
+    const isMaster=kind==='master';
+    const button=isMaster?els.firmwareUseBundledMasterBtn:els.firmwareUseBundledBtn;
+    const url=isMaster?BUNDLED_MASTER_UF2:BUNDLED_PLC_UF2;
+    const expectedHash=isMaster?BUNDLED_MASTER_UF2_SHA256:BUNDLED_PLC_UF2_SHA256;
+    const releaseLabel=isMaster?'Master RAM_FRAME_V2':'PLC PERSISTENT_EFFECT_V5';
+    button.disabled=true;setFirmwareResult(`正在读取并校验内置 ${releaseLabel} 固件…`);
+    try{const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw new Error(`内置固件读取失败：HTTP ${response.status}`);await selectFirmwareBytes(url.split('/').pop(),await response.arrayBuffer(),`网页内置 ${releaseLabel}`,expectedHash);}
+    finally{button.disabled=false;}
   }
   function downloadSelectedFirmware(){
     if(!selectedFirmware)return;const blob=new Blob([selectedFirmware.buffer],{type:'application/octet-stream'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=selectedFirmware.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function openOfficialFirmwareUpdater(){
     if(!selectedFirmware)throw new Error('请先选择并校验最新版固件。');
-    if(!confirm(`即将下载已校验的 ${selectedFirmware.meta.family.label} V5 固件，并打开 QK 官方驱动。\n\n请在官方驱动的固件升级页面选择刚下载的 UF2；刷写期间不要断电。继续吗？`))return;
+    const releaseLabel=selectedFirmware.meta.family.key==='MASTER'?'Master V2':'PLC V5';
+    if(!confirm(`即将下载已校验的 ${releaseLabel} 固件，并打开 QK 官方驱动。\n\n请确认官方驱动中选择的升级目标与文件控制器一致；刷写期间不要断电。继续吗？`))return;
     downloadSelectedFirmware();
     const opened=window.open(OFFICIAL_QK_UPDATER_URL,'_blank');
     if(opened)opened.opener=null;
@@ -3168,7 +3176,8 @@
     els.macroRecordBtn.addEventListener('click',toggleMacroRecording);els.macroStopOverlayBtn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();stopMacroRecording();});
     els.macroClearBtn.addEventListener('click',()=>{syncMacroExpression('');els.macroStatus.textContent='宏已清空，尚未保存到键盘';});
     els.exportProfileBtn.addEventListener('click',()=>safe(exportProfile));els.profileFileInput.addEventListener('change',()=>{const f=els.profileFileInput.files?.[0];if(f)safe(()=>loadProfileFile(f));});els.applyProfileBtn.addEventListener('click',()=>safe(applyProfile));
-    els.firmwareUseBundledBtn?.addEventListener('click',()=>safe(useBundledFirmware));
+    els.firmwareUseBundledMasterBtn?.addEventListener('click',()=>safe(()=>useBundledFirmware('master')));
+    els.firmwareUseBundledBtn?.addEventListener('click',()=>safe(()=>useBundledFirmware('plc')));
     els.firmwareWriteBtn?.addEventListener('click',()=>safe(async()=>openOfficialFirmwareUpdater()));
     els.readDeviceSettingsBtn.addEventListener('click',()=>safe(readDeviceSettings));els.saveMagicBtn.addEventListener('click',()=>safe(saveMagic));els.saveFeaturesBtn.addEventListener('click',()=>safe(saveFeatures));els.syncTimeBtn.addEventListener('click',()=>safe(syncKeyboardTime));els.connectMode.addEventListener('change',updateConnectActionAvailability);els.saveConnectModeBtn.addEventListener('click',()=>safe(saveConnectMode));els.clearCurrentBindBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(3,'删除当前绑定')));els.clearAllBindsBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(4,'删除全部蓝牙绑定')));els.receiverDfuBtn.addEventListener('click',()=>safe(()=>triggerConnectAction(5,'进入 2.4G Receiver DFU')));els.eepromResetBtn.addEventListener('click',()=>safe(eepromReset));
     if(navigator.hid)navigator.hid.addEventListener('disconnect',e=>{if(hidDevice===e.device){hidDevice=null;rgbLiveRunning=false;rgbSmoothRunning=false;rgbV2Takeover=false;els.rgbLiveBtn.textContent='▶ 实时播放到键盘';if(els.rgbSmoothEffectBtn)els.rgbSmoothEffectBtn.textContent='▶ 顺滑播放选中键';setDot(els.hidDot,false);els.hidInfo.textContent='已断开';els.connectHidBtn.textContent='连接 HID';updateHistoryButtons();toast('HID 已断开',true);}});

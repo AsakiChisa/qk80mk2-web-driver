@@ -18,9 +18,9 @@ QK80 MK2 的本地网页驱动。项目使用原生 HTML、CSS 和 JavaScript，
 - 任意按键多选效果范围，以及单包 `MASK_COLOR` 顺滑呼吸/双色渐变
 - Profile 导入与导出
 - 本地界面主题与背景设置
-- 最新 V5 UF2 的结构、Family ID、地址范围与 SHA-256 本地校验
+- Master V2 与 PLC V5 UF2 的结构、Family ID、地址范围与 SHA-256 本地校验
 - 完整 91 灯静态底图和自定义呼吸/流动渐变参数一起保存到键盘 Flash（V5 已实机验证）
-- 内置 PERSISTENT_EFFECT_V5 PLC 固件下载，并跳转 QK 官方驱动完成升级
+- 内置 Master RAM_FRAME_V2 与 PLC PERSISTENT_EFFECT_V5 固件下载，并跳转 QK 官方驱动完成升级
 
 ## 主键盘 RGB
 
@@ -52,10 +52,13 @@ V5 基于已经用户实机验证的 V4 构建，继续使用同一独立 2 KiB 
 
 “固件升级”页不再直接写键盘。实测原来的浏览器“另存为到引导盘”方式存在兼容问题，而现有证据不足以安全复刻官方 `EF/F0/F1` 在线升级链，因此实际刷写统一交给 QK 官方驱动：
 
-1. 点击“选择最新版 PERSISTENT_EFFECT_V5”。
-2. 页面检查 512-byte 块结构、魔数、块序号、256-byte payload、PLC Family ID、目标地址和 SHA-256。
-3. 点击“下载固件并打开 QK 官方驱动”（正确入口：[cfg.qwertykeys.com](https://cfg.qwertykeys.com/)）。
-4. 确认一次后，在 QK 官方驱动中选择刚下载的 UF2 并执行 PLC 升级。
+首次安装需要依次处理两个控制器：
+
+1. 选择 `Master RAM_FRAME_V2`，页面校验后下载；在 QK 官方驱动中确认目标为 **Master** 并升级。
+2. 返回本页选择 `PLC PERSISTENT_EFFECT_V5`，页面校验后下载；在 QK 官方驱动中确认目标为 **PLC** 并升级。
+3. 已经刷过 Master V2 的键盘可跳过第一项，只升级 PLC V5。
+
+页面会检查 512-byte 块结构、魔数、块序号、256-byte payload、对应 Family ID、目标地址和 SHA-256。正确官方驱动入口为 [cfg.qwertykeys.com](https://cfg.qwertykeys.com/)。两个 UF2 不能选错控制器。
 
 本网页不会再显示“另存为”，也不会自行打开或写入 UF2 引导盘。
 
