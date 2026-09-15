@@ -47,7 +47,7 @@
     [0x514b4d02, { key: 'MASTER', label: 'QK80 MK2 Master', minAddress: 0x00020000, maxAddress: 0x00200000 }],
     [0x514b4d50, { key: 'PLC', label: 'QK80 MK2 PLC', minAddress: 0x08000000, maxAddress: 0x08200000 }],
   ]);
-  const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V5_BACKGROUND_UNFLASHED_CANDIDATE.uf2';
+  const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V5_BACKGROUND.uf2';
   const BUNDLED_PLC_UF2_SHA256 = 'B57584DDAFA212CF134BC0D6A5610F641A90DF1008677C35AAE88D12E27A9C60';
   const OFFICIAL_QK_UPDATER_URL = 'https://cfg.qwertykeys.com/';
 
@@ -997,7 +997,7 @@
       d.protocol=await diagnosticHid(CMD.GET_PROTOCOL,[]);
       d.layers=await diagnosticHid(CMD.GET_LAYER_COUNT,[]);
       d.cdcSupport=await diagnosticHid(CMD.CDC_SUPPORT,[]);
-      d.ramFrameV2={version:2,hostPath:[0x07,0x16,0x05],plcCommand:0x5a,ledCount:91,dataChunks:13,chunkBytes:21,staticPacketDelayMs:RGB_V2_PACKET_DELAY_MS,livePacketDelayMs:10,liveFps:4,liveValidated:true,maskColorV3:{operation:4,maskBytes:12,targetFps:30,actualFps:30,liveValidated:true},persistentV5:{saveOperation:5,clearOperation:6,effectBytes:20,backgroundBytes:273,recordBytes:300,configPage:'0x080FD800',hardwareValidated:false}};
+      d.ramFrameV2={version:2,hostPath:[0x07,0x16,0x05],plcCommand:0x5a,ledCount:91,dataChunks:13,chunkBytes:21,staticPacketDelayMs:RGB_V2_PACKET_DELAY_MS,livePacketDelayMs:10,liveFps:4,liveValidated:true,maskColorV3:{operation:4,maskBytes:12,targetFps:30,actualFps:30,liveValidated:true},persistentV5:{saveOperation:5,clearOperation:6,effectBytes:20,backgroundBytes:273,recordBytes:300,configPage:'0x080FD800',hardwareValidated:true}};
       d.axisChannel=[];
       for(let id=1;id<=16;id++){
         const r=await diagnosticHid(CMD.CUSTOM_GET,[CHANNEL.AXIS,id],700);d.axisChannel.push({id,...r});

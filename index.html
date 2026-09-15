@@ -300,7 +300,7 @@
                 <button class="primary rgb-effect-generate" id="rgbSavePersistentEffectBtn">保存到键盘（断电保留）</button>
                 <button class="ghost rgb-effect-generate danger-text" id="rgbClearPersistentEffectBtn">清除键盘本地灯效</button>
               </div>
-              <small class="rgb-effect-note" id="rgbPersistentEffectStatus">键盘本地保存需要 PERSISTENT_EFFECT_V5 PLC 候选固件。它会保存当前完整静态画板，以及呼吸/流动渐变的按键范围、颜色、方向、亮度和周期；只有点击保存或清除时才会擦写 Flash。</small>
+              <small class="rgb-effect-note" id="rgbPersistentEffectStatus">键盘本地保存需要 PERSISTENT_EFFECT_V5 PLC 固件（已通过实机验收）。它会保存当前完整静态画板，以及呼吸/流动渐变的按键范围、颜色、方向、亮度和周期；只有点击保存或清除时才会擦写 Flash。</small>
               <small class="rgb-effect-note">顺滑播放与 V5 断电保存都会使用当前画板作为底图：选中灯播放呼吸/渐变，未选中灯保持各自静态颜色。播放中如需改色，请先停止后重新播放；不支持持久保存任意逐帧动画。</small>
             </div>
             <div class="rgb-project-box">
@@ -740,7 +740,7 @@
               <div><span>大小</span><strong>—</strong></div>
               <div><span>SHA-256</span><strong>—</strong></div>
             </div>
-            <p class="setting-note"><strong>V5 基于已实机验证的 V4 构建，可额外保存完整 91 灯静态底图；V5 尚待首次实机验收，只适用于 PLC。</strong> 点击后会在本地检查 UF2 结构、Family ID、地址范围和 SHA-256；异常时请刷回官方固件。</p>
+            <p class="setting-note"><strong>V5 已通过实机验收，可保存完整 91 灯静态底图和选中键动画，只适用于 PLC。</strong> 点击后会在本地检查 UF2 结构、Family ID、地址范围和 SHA-256；异常时请刷回官方固件。</p>
           </article>
 
           <article class="card firmware-card">

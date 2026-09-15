@@ -1,8 +1,8 @@
-# QK80 MK2 V5 首次实机验收
+# QK80 MK2 V5 实机验收记录
 
-V5 会把完整 91 灯静态底图和选中键的呼吸/渐变参数一起保存。候选 UF2：
+V5 会把完整 91 灯静态底图和选中键的呼吸/渐变参数一起保存。已验收 UF2：
 
-`firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V5_BACKGROUND_UNFLASHED_CANDIDATE.uf2`
+`firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V5_BACKGROUND.uf2`
 
 SHA-256：
 
@@ -10,9 +10,9 @@ SHA-256：
 B57584DDAFA212CF134BC0D6A5610F641A90DF1008677C35AAE88D12E27A9C60
 ```
 
-V5 基于已实机验证的 V4，但 V5 自身尚未刷机验证。请保留官方 PLC 固件，只通过 [QK 官方驱动](https://cfg.qwertykeys.com/)升级，并确认刷写目标为 PLC。
+该精确 SHA-256 的 V5 映像已完成实机验收。请继续保留官方 PLC 固件，只通过 [QK 官方驱动](https://cfg.qwertykeys.com/)升级，并确认刷写目标为 PLC。
 
-## 最小验收步骤
+## 回归测试步骤
 
 1. 在画板把 F1 设红色、F5 设绿色、F9 设蓝色，其他灯可自行设置。
 2. 效果生成器只选择 Esc，设置 4 秒呼吸或双色渐变。
