@@ -47,8 +47,8 @@
     [0x514b4d02, { key: 'MASTER', label: 'QK80 MK2 Master', minAddress: 0x00020000, maxAddress: 0x00200000 }],
     [0x514b4d50, { key: 'PLC', label: 'QK80 MK2 PLC', minAddress: 0x08000000, maxAddress: 0x08200000 }],
   ]);
-  const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V4_UNFLASHED_CANDIDATE.uf2';
-  const BUNDLED_PLC_UF2_SHA256 = '1E255F8EB54DED15BCF62A5E469DBAFE93AE9EE5ABE49E9349416B4174623C3E';
+  const BUNDLED_PLC_UF2 = './firmware/QK80MK2_PLC_v1.1.1_PERSISTENT_EFFECT_V5_BACKGROUND_UNFLASHED_CANDIDATE.uf2';
+  const BUNDLED_PLC_UF2_SHA256 = 'B57584DDAFA212CF134BC0D6A5610F641A90DF1008677C35AAE88D12E27A9C60';
   const OFFICIAL_QK_UPDATER_URL = 'https://cfg.qwertykeys.com/';
 
   // QK80 MK2 / QMK lighting mode tables, verified against the original QK UI.
@@ -997,7 +997,7 @@
       d.protocol=await diagnosticHid(CMD.GET_PROTOCOL,[]);
       d.layers=await diagnosticHid(CMD.GET_LAYER_COUNT,[]);
       d.cdcSupport=await diagnosticHid(CMD.CDC_SUPPORT,[]);
-      d.ramFrameV2={version:2,hostPath:[0x07,0x16,0x05],plcCommand:0x5a,ledCount:91,dataChunks:13,chunkBytes:21,staticPacketDelayMs:RGB_V2_PACKET_DELAY_MS,livePacketDelayMs:10,liveFps:4,liveValidated:true,maskColorV3:{operation:4,maskBytes:12,targetFps:30,actualFps:30,liveValidated:true}};
+      d.ramFrameV2={version:2,hostPath:[0x07,0x16,0x05],plcCommand:0x5a,ledCount:91,dataChunks:13,chunkBytes:21,staticPacketDelayMs:RGB_V2_PACKET_DELAY_MS,livePacketDelayMs:10,liveFps:4,liveValidated:true,maskColorV3:{operation:4,maskBytes:12,targetFps:30,actualFps:30,liveValidated:true},persistentV5:{saveOperation:5,clearOperation:6,effectBytes:20,backgroundBytes:273,recordBytes:300,configPage:'0x080FD800',hardwareValidated:false}};
       d.axisChannel=[];
       for(let id=1;id<=16;id++){
         const r=await diagnosticHid(CMD.CUSTOM_GET,[CHANNEL.AXIS,id],700);d.axisChannel.push({id,...r});
@@ -1647,15 +1647,20 @@
     if (rgbBusy) throw new Error(`主键盘 RGB 正在${rgbBusy}，请等待当前操作完成。`);
     if (rgbLiveRunning) await stopRgbLive();
     if (rgbSmoothRunning) await stopRgbSmoothEffect();
+    ensureRgbState();
     const encoded = encodePersistentRgbEffect();
-    if (!confirm(`将把当前“${encoded.type}”参数写入键盘 Flash，作用于 ${encoded.count} 颗灯。\n\n写入完成后关闭网页、拔线重插仍会自动运行。写入过程中请勿断电；只有点击本按钮时才会擦写一次。继续吗？`)) return;
+    const backgroundFrame = [...rgbFrame()];
+    if (!confirm(`将把当前完整静态画板和“${encoded.type}”一起写入键盘 Flash，动画作用于 ${encoded.count} 颗灯。\n\n未选中的灯会保留画板中的各自颜色；关闭网页、拔线重插后仍会恢复。写入过程中请勿断电；只有点击本按钮时才会擦写一次。继续吗？`)) return;
     setRgbBusy('保存本地灯效');
     try {
-      els.rgbPersistentEffectStatus.textContent = '正在写入键盘 Flash，请勿断电…';
+      els.rgbPersistentEffectStatus.textContent = '正在把 91 灯静态底图提交到键盘 RAM…';
+      await writeRgbFrameToKeyboard(backgroundFrame, { commit: true, progress: true, packetDelayMs: RGB_V2_PACKET_DELAY_MS });
+      rgbLastSentFrame = [...backgroundFrame];
+      els.rgbPersistentEffectStatus.textContent = '底图已提交，正在把底图和动画参数写入键盘 Flash，请勿断电…';
       await sendRgbV2Payload(makeRgbV2Payload(RGB_V2_OP.SAVE_EFFECT, nextRgbV2Session(), 0, 20, encoded.data), { paced: false });
       rgbPersistentEffectSaved = true;
       rgbV2Takeover = false;
-      els.rgbPersistentEffectStatus.textContent = `已保存：${encoded.type} · ${encoded.count} 灯 · ${encoded.periodMs / 1000} 秒周期；关闭网页和断电后仍保留。`;
+      els.rgbPersistentEffectStatus.textContent = `V5 已保存：完整静态底图 + ${encoded.type} · ${encoded.count} 灯 · ${encoded.periodMs / 1000} 秒周期；关闭网页和断电后仍保留。`;
       els.rgbPainterStatus.textContent = '键盘本地灯效已启用；网页实时播放会临时接管，退出后自动恢复本地灯效。';
       toast('灯效已保存到键盘（断电保留）');
     } finally { setRgbBusy(''); }
@@ -2917,8 +2922,8 @@
     }catch(err){resetFirmwareSelection('固件校验失败。');els.firmwareValidationBadge.textContent='已拒绝';els.firmwareValidationBadge.className='firmware-badge bad';setFirmwareResult(err.message,'bad');throw err;}finally{updateFirmwareWriteAvailability();}
   }
   async function useBundledFirmware(){
-    els.firmwareUseBundledBtn.disabled=true;setFirmwareResult('正在读取并校验内置 PERSISTENT_EFFECT_V4 PLC 固件…');
-    try{const response=await fetch(BUNDLED_PLC_UF2,{cache:'no-store'});if(!response.ok)throw new Error(`内置固件读取失败：HTTP ${response.status}`);await selectFirmwareBytes(BUNDLED_PLC_UF2.split('/').pop(),await response.arrayBuffer(),'网页内置最新版 V4',BUNDLED_PLC_UF2_SHA256);}
+    els.firmwareUseBundledBtn.disabled=true;setFirmwareResult('正在读取并校验内置 PERSISTENT_EFFECT_V5 PLC 固件…');
+    try{const response=await fetch(BUNDLED_PLC_UF2,{cache:'no-store'});if(!response.ok)throw new Error(`内置固件读取失败：HTTP ${response.status}`);await selectFirmwareBytes(BUNDLED_PLC_UF2.split('/').pop(),await response.arrayBuffer(),'网页内置最新版 V5',BUNDLED_PLC_UF2_SHA256);}
     finally{els.firmwareUseBundledBtn.disabled=false;}
   }
   function downloadSelectedFirmware(){
@@ -2926,7 +2931,7 @@
   }
   function openOfficialFirmwareUpdater(){
     if(!selectedFirmware)throw new Error('请先选择并校验最新版固件。');
-    if(!confirm(`即将下载已校验的 ${selectedFirmware.meta.family.label} V4 固件，并打开 QK 官方驱动。\n\n请在官方驱动的固件升级页面选择刚下载的 UF2；刷写期间不要断电。继续吗？`))return;
+    if(!confirm(`即将下载已校验的 ${selectedFirmware.meta.family.label} V5 固件，并打开 QK 官方驱动。\n\n请在官方驱动的固件升级页面选择刚下载的 UF2；刷写期间不要断电。继续吗？`))return;
     downloadSelectedFirmware();
     const opened=window.open(OFFICIAL_QK_UPDATER_URL,'_blank');
     if(opened)opened.opener=null;
