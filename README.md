@@ -4,6 +4,14 @@ QK80 MK2 的本地网页驱动。项目使用原生 HTML、CSS 和 JavaScript，
 
 当前版本：**v1.8.0**
 
+## 在线使用
+
+无需下载或安装，使用桌面版 Chrome 或 Edge 直接打开：
+
+**[https://qk80mk2.chisa.moe/](https://qk80mk2.chisa.moe/)**
+
+使用前请关闭 QK 官方配置页面，避免两个网页同时占用键盘的 HID 或串口连接。
+
 ## 功能
 
 - VIA/QMK 键位读取与改键
